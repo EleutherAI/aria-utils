@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ariautils"  
+version = "0.0.1"
+description = ""
+authors = [{name = "Louis Bradshaw", email = "loua19@outlook.com"}]
+requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
+dependencies = [
+    "mido",
+]
+readme = "README.md"
+keywords = []
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Repository = "https://github.com/EleutherAI/aria-utils"
+
+[project.optional-dependencies]
+dev = [
+    "mypy",
+    "black",
+]
+
+
+[tool.setuptools]
+packages = ["ariautils"] 
+include-package-data = true
+
+[tool.setuptools.package-data]
+"ariautils.config" = ["*.json"] 
+
+[tool.black]
+line-length = 80
+target-version = ["py311"]
+include = '\.pyi?$'
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[tool.pytest]
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "-ra -q"
