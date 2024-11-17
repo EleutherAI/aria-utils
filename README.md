@@ -1,3 +1,5 @@
 # aria-utils
 
-MIDI tokenizers and pre-processing utils.
+An extremely lightweight and simple library for pre-processing and tokenizing MIDI files.
+
+
