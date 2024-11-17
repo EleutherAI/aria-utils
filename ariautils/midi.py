@@ -23,7 +23,7 @@ from typing import (
 )
 
 from mido.midifiles.units import tick2second
-from ariautils.utils import load_config
+from ariautils.utils import load_config, load_maestro_metadata_json
 
 
 class MetaMessage(TypedDict):
@@ -944,23 +944,26 @@ def meta_composer_metamsg(
         return {}
 
 
-# This should only be used when processing MAESTRO, it requires maestro.json
-# to be in the working directory. This json files contains MAESTRO metadata in
-# the form file_name: {"composer": str, "title": str}
+# TODO: Needs testing
 def meta_maestro_json(
     mid: mido.MidiFile,
     msg_data: MidiDictData,
     composer_names: list,
     form_names: list,
 ) -> Dict[str, str]:
-    if os.path.isfile("maestro.json") is False:
-        print("MAESTRO metadata function enabled but ./maestro.json not found.")
-        return {}
+    """Loads composer and form metadata from MAESTRO metadata json file.
 
-    file_name = Path(str(mid.filename)).name
-    with open("maestro.json", "r") as f:
-        _file_name_without_ext = os.path.splitext(file_name)[0]
-        metadata = json.load(f).get(_file_name_without_ext + ".midi", None)
+
+    This should only be used when processing MAESTRO, it requires maestro.json
+    to be in the working directory. This json files contains MAESTRO metadata in
+    the form file_name: {"composer": str, "title": str}.
+    """
+
+    _file_name = Path(str(mid.filename)).name
+    _file_name_without_ext = os.path.splitext(_file_name)[0]
+    metadata = load_maestro_metadata_json().get(
+        _file_name_without_ext + ".midi", None
+    )
     if metadata == None:
         return {}
 
