@@ -1,6 +1,5 @@
 """Includes functionality for loading config files."""
 
-import os
 import json
 
 from importlib import resources
