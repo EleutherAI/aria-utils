@@ -42,7 +42,7 @@ class TestMidiDict(unittest.TestCase):
         midi_dict = MidiDict.from_midi(mid_path=load_path)
         midi_dict.to_midi().save(save_path)
 
-    def test_tick_to_ms(self):
+    def test_tick_to_ms(self) -> None:
         CORRECT_LAST_NOTE_ONSET_MS: Final[int] = 220140
         load_path = TEST_DATA_DIRECTORY.joinpath("arabesque.mid")
         midi_dict = MidiDict.from_midi(load_path)
@@ -51,7 +51,7 @@ class TestMidiDict(unittest.TestCase):
         last_note_onset_ms = midi_dict.tick_to_ms(last_note_onset_tick)
         self.assertEqual(last_note_onset_ms, CORRECT_LAST_NOTE_ONSET_MS)
 
-    def test_calculate_hash(self):
+    def test_calculate_hash(self) -> None:
         # Load two identical files with different filenames and metadata
         load_path = TEST_DATA_DIRECTORY.joinpath("arabesque.mid")
         midi_dict_orig = MidiDict.from_midi(load_path)
