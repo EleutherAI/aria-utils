@@ -12,7 +12,6 @@ from collections import defaultdict
 from pathlib import Path
 from typing import (
     Any,
-    Tuple,
     Final,
     Concatenate,
     Callable,
@@ -510,7 +509,7 @@ class MidiDict:
 # TODO: The sign has been changed. Make sure this function isn't used anywhere else
 def _extract_track_data(
     track: mido.MidiTrack,
-) -> Tuple[
+) -> tuple[
     list[MetaMessage],
     list[TempoMessage],
     list[PedalMessage],
@@ -787,7 +786,7 @@ def dict_to_midi(mid_data: MidiDictData) -> mido.MidiFile:
                 )
 
     # Magic sorting function
-    def _sort_fn(msg: mido.Message) -> Tuple[int, int]:
+    def _sort_fn(msg: mido.Message) -> tuple[int, int]:
         if hasattr(msg, "velocity"):
             return (msg.time, msg.velocity)  # pyright: ignore
         else:
@@ -1016,7 +1015,7 @@ def get_metadata_fn(
         return fn
 
 
-def test_max_programs(midi_dict: MidiDict, max: int) -> Tuple[bool, int]:
+def test_max_programs(midi_dict: MidiDict, max: int) -> tuple[bool, int]:
     """Returns false if midi_dict uses more than {max} programs."""
     present_programs = set(
         map(
@@ -1031,7 +1030,7 @@ def test_max_programs(midi_dict: MidiDict, max: int) -> Tuple[bool, int]:
         return False, len(present_programs)
 
 
-def test_max_instruments(midi_dict: MidiDict, max: int) -> Tuple[bool, int]:
+def test_max_instruments(midi_dict: MidiDict, max: int) -> tuple[bool, int]:
     present_instruments = set(
         map(
             lambda msg: midi_dict.program_to_instrument[msg["data"]],
@@ -1047,7 +1046,7 @@ def test_max_instruments(midi_dict: MidiDict, max: int) -> Tuple[bool, int]:
 
 def test_note_frequency(
     midi_dict: MidiDict, max_per_second: float, min_per_second: float
-) -> Tuple[bool, float]:
+) -> tuple[bool, float]:
     if not midi_dict.note_msgs:
         return False, 0.0
 
@@ -1072,7 +1071,7 @@ def test_note_frequency(
 
 def test_note_frequency_per_instrument(
     midi_dict: MidiDict, max_per_second: float, min_per_second: float
-) -> Tuple[bool, float]:
+) -> tuple[bool, float]:
     num_instruments = len(
         set(
             map(
@@ -1110,7 +1109,7 @@ def test_note_frequency_per_instrument(
 
 def test_min_length(
     midi_dict: MidiDict, min_seconds: int
-) -> Tuple[bool, float]:
+) -> tuple[bool, float]:
     if not midi_dict.note_msgs:
         return False, 0.0
 
@@ -1129,9 +1128,9 @@ def test_min_length(
 
 def get_test_fn(
     test_name: str,
-) -> Callable[Concatenate[MidiDict, ...], Tuple[bool, Any]]:
+) -> Callable[Concatenate[MidiDict, ...], tuple[bool, Any]]:
     name_to_fn: dict[
-        str, Callable[Concatenate[MidiDict, ...], Tuple[bool, Any]]
+        str, Callable[Concatenate[MidiDict, ...], tuple[bool, Any]]
     ] = {
         "max_programs": test_max_programs,
         "max_instruments": test_max_instruments,
