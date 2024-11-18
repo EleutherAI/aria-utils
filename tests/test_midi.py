@@ -45,6 +45,7 @@ class TestMidiDict(unittest.TestCase):
         save_path = RESULTS_DATA_DIRECTORY.joinpath(
             "arabesque_pedal_resolved.mid"
         )
+
         midi_dict = MidiDict.from_midi(mid_path=load_path).resolve_pedal()
         midi_dict.to_midi().save(save_path)
 
