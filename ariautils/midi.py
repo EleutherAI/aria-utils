@@ -20,6 +20,7 @@ from typing import (
     TypeAlias,
     Literal,
     TypedDict,
+    cast,
 )
 
 from mido.midifiles.units import tick2second
@@ -213,7 +214,7 @@ class MidiDict:
         return cls(**midi_to_dict(mid))
 
     def calculate_hash(self) -> str:
-        msg_dict_to_hash = dict(self.get_msg_dict())
+        msg_dict_to_hash = cast(dict, self.get_msg_dict())
 
         # Remove metadata before calculating hash
         msg_dict_to_hash.pop("meta_msgs")
@@ -330,7 +331,7 @@ class MidiDict:
 
         return self
 
-    # TODO: Needs to be refactored and tested
+    # TODO: Needs to be refactored
     def remove_redundant_pedals(self) -> "MidiDict":
         """Removes redundant pedal messages from the MIDI data in place.
 
@@ -790,9 +791,9 @@ def dict_to_midi(mid_data: MidiDictData) -> mido.MidiFile:
     # Magic sorting function
     def _sort_fn(msg: mido.Message) -> Tuple[int, int]:
         if hasattr(msg, "velocity"):
-            return (msg.time, msg.velocity)
+            return (msg.time, msg.velocity)  # pyright: ignore
         else:
-            return (msg.time, 1000)
+            return (msg.time, 1000)  # pyright: ignore
 
     # Sort and convert from abs_time -> delta_time
     track = sorted(track, key=_sort_fn)
