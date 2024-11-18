@@ -187,7 +187,7 @@ class Tokenizer:
         """Transforms an augmentation function for concatenated sequences.
 
         This is useful for augmentation functions that are only defined for
-        sequences which start with <S> and end with <E>.
+        sequences which start with "<S>" and end with "<E>".
 
         Args:
             aug_fn (Callable[[list[Token]], list[Token]]): The augmentation
@@ -205,7 +205,7 @@ class Tokenizer:
             eos_tok: str,
             **kwargs: Any,
         ) -> list[Token]:
-            # Split list on '<E>'
+            # Split list on "<E>"
             initial_seq_len = len(src)
             src_sep = []
             prev_idx = 0
