@@ -15,14 +15,3 @@ def load_config() -> Dict[str, Any]:
         .open("r") as f
     ):
         return cast(Dict[str, Any], json.load(f))
-
-
-# TODO: Move somewhere else
-def load_maestro_metadata_json() -> Dict[str, Any]:
-    """Loads MAESTRO metadata json ."""
-    with (
-        resources.files("ariautils.config")
-        .joinpath("maestro_metadata.json")
-        .open("r") as f
-    ):
-        return cast(Dict[str, Any], json.load(f))

@@ -28,15 +28,14 @@ Repository = "https://github.com/EleutherAI/aria-utils"
 dev = [
     "mypy",
     "black",
+    "pytest",
 ]
-
 
 [tool.setuptools]
 packages = ["ariautils"] 
-include-package-data = true
 
 [tool.setuptools.package-data]
-"ariautils.config" = ["*.json"] 
+ariautils = ["config/*.json"]
 
 [tool.black]
 line-length = 80
@@ -45,6 +44,7 @@ include = '\.pyi?$'
 
 [tool.mypy]
 python_version = "3.11"
+packages = ["ariautils", "tests"]
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -61,7 +61,8 @@ ignore_missing_imports = true
 namespace_packages = true
 explicit_package_bases = true
 
-[tool.pytest]
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q -s"
 testpaths = ["tests"]
-python_files = "test_*.py"
-addopts = "-ra -q"
+python_files = ["test_*.py"]

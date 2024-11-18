@@ -14,7 +14,7 @@ from typing import (
     Dict,
     Any,
     Tuple,
-    ParamSpec,
+    Final,
     Concatenate,
     Callable,
     TypeAlias,
@@ -148,9 +148,9 @@ class MidiDict:
 
     @classmethod
     def get_program_to_instrument(cls) -> Dict[int, str]:
-        """Get map of MIDI program to instrument name."""
+        """Return a map of MIDI program to instrument name."""
 
-        return (
+        PROGRAM_TO_INSTRUMENT: Final[Dict[int, str]] = (
             {i: "piano" for i in range(0, 7 + 1)}
             | {i: "chromatic" for i in range(8, 15 + 1)}
             | {i: "organ" for i in range(16, 23 + 1)}
@@ -168,6 +168,8 @@ class MidiDict:
             | {i: "percussive" for i in range(112, 119 + 1)}
             | {i: "sfx" for i in range(120, 127 + 1)}
         )
+
+        return PROGRAM_TO_INSTRUMENT
 
     def get_msg_dict(self) -> MidiDictData:
         """Returns MidiDict data in dictionary form."""
