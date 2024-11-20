@@ -24,6 +24,11 @@ from typing import (
 from ariautils.utils import load_config, load_maestro_metadata_json
 
 
+# TODO:
+# - Remove unneeded comments
+# - Add asserts
+
+
 class MetaMessage(TypedDict):
     """Meta message type corresponding text or copyright MIDI meta messages."""
 
