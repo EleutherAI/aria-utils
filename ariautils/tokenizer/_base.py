@@ -17,12 +17,7 @@ Token: TypeAlias = tuple[Any, ...] | str
 
 
 class Tokenizer:
-    """Abstract Tokenizer class for tokenizing MidiDict objects.
-
-    Args:
-        return_tensors (bool, optional): If True, encode will return tensors.
-            Defaults to False.
-    """
+    """Abstract Tokenizer class for tokenizing MidiDict objects."""
 
     def __init__(
         self,

@@ -1,5 +1,6 @@
 """Includes Tokenizers and pre-processing utilities."""
 
-from ariautils.tokenizer._base import Tokenizer
+from ._base import Tokenizer
+from .absolute import AbsTokenizer
 
-__all__ = ["Tokenizer"]
+__all__ = ["Tokenizer", "AbsTokenizer"]

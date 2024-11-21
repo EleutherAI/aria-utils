@@ -1,3 +1,5 @@
+""""Tests for MidiDict."""
+
 import unittest
 import tempfile
 import shutil

@@ -6,7 +6,7 @@ import random
 import copy
 
 from collections import defaultdict
-from typing import Final, Callable
+from typing import Final, Callable, Any
 
 from ariautils.midi import (
     MidiDict,
@@ -26,25 +26,31 @@ logger = get_logger(__package__)
 
 # TODO:
 # - Add asserts to the tokenization / detokenization for user error
+# - Need to add a tokenization or MidiDict check of how to resolve different
+#   channels, with the same instrument, have overlaping notes
+# - There are tons of edge cases here e.g., what if there are two indetical notes?
+#   on different channels.
 
 
 class AbsTokenizer(Tokenizer):
     """MidiDict tokenizer implemented with absolute onset timings.
 
-    The tokenizer processes MIDI files in 5000ms segments, with each segment separated by
-    a special <T> token. Within each segment, note timings are represented relative to the
-    segment start.
+    The tokenizer processes MIDI files in 5000ms segments, with each segment
+    separated by a special <T> token. Within each segment, note timings are
+    represented relative to the segment start.
 
     Tokenization Schema:
         For non-percussion instruments:
             - Each note is represented by three consecutive tokens:
-                1. [instrument, pitch, velocity]: Instrument class, MIDI pitch, and velocity
+                1. [instrument, pitch, velocity]: Instrument class, MIDI pitch,
+                    and velocity
                 2. [onset]: Absolute time in milliseconds from segment start
                 3. [duration]: Note duration in milliseconds
 
         For percussion instruments:
             - Each note is represented by two consecutive tokens:
-                1. [drum, note_number]: Percussion instrument and MIDI note number
+                1. [drum, note_number]: Percussion instrument and MIDI note
+                    number
                 2. [onset]: Absolute time in milliseconds from segment start
 
     Notes:
@@ -140,7 +146,9 @@ class AbsTokenizer(Tokenizer):
 
     def _quantize_dur(self, time: int) -> int:
         # This function will return values res >= 0 (inc. 0)
-        return self._find_closest_int(time, self.dur_time_quantizations)
+        dur = self._find_closest_int(time, self.dur_time_quantizations)
+
+        return dur if dur != 0 else self.time_step
 
     def _quantize_onset(self, time: int) -> int:
         # This function will return values res >= 0 (inc. 0)
@@ -337,8 +345,6 @@ class AbsTokenizer(Tokenizer):
                     curr_time_since_onset % self.abs_time_step
                 )
                 _note_duration = self._quantize_dur(_note_duration)
-                if _note_duration == 0:
-                    _note_duration = self.time_step
 
                 tokenized_seq.append((_instrument, _pitch, _velocity))
                 tokenized_seq.append(("onset", _note_onset))
@@ -347,6 +353,28 @@ class AbsTokenizer(Tokenizer):
         return self._format(
             prefix=prefix,
             unformatted_seq=tokenized_seq,
+        )
+
+    def tokenize(
+        self,
+        midi_dict: MidiDict,
+        remove_preceding_silence: bool = True,
+        **kwargs: Any,
+    ) -> list[Token]:
+        """Tokenizes a MidiDict object into a sequence.
+
+        Args:
+            midi_dict (MidiDict): The MidiDict to tokenize.
+            remove_preceding_silence (bool): If true starts the sequence at
+                onset=0ms by removing preceding silence. Defaults to False.
+
+        Returns:
+            list[Token]: A sequence of tokens representing the MIDI content.
+        """
+
+        return self._tokenize_midi_dict(
+            midi_dict=midi_dict,
+            remove_preceding_silence=remove_preceding_silence,
         )
 
     def _detokenize_midi_dict(self, tokenized_seq: list[Token]) -> MidiDict:
@@ -533,6 +561,18 @@ class AbsTokenizer(Tokenizer):
             ticks_per_beat=TICKS_PER_BEAT,
             metadata={},
         )
+
+    def detokenize(self, tokenized_seq: list[Token], **kwargs: Any) -> MidiDict:
+        """Detokenizes a MidiDict object.
+
+        Args:
+            tokenized_seq (list): The sequence of tokens to detokenize.
+
+        Returns:
+            MidiDict: A MidiDict reconstructed from the tokens.
+        """
+
+        return self._detokenize_midi_dict(tokenized_seq=tokenized_seq)
 
     def export_pitch_aug(
         self, aug_range: int
