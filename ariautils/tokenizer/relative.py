@@ -1,11 +1,9 @@
-"""Contains MIDI tokenizer with absolute onset timings."""
+"""Contains MIDI tokenizer with relative onset timings."""
 
 import functools
 import itertools
 import random
-import copy
 
-from collections import defaultdict
 from typing import Final, Callable, Any, Concatenate
 
 from ariautils.midi import (
@@ -24,35 +22,30 @@ from ariautils.tokenizer._base import Tokenizer, Token
 logger = get_logger(__package__)
 
 
-# TODO:
-# - Add asserts to the tokenization / detokenization for user error
-# - Need to add a tokenization or MidiDict check of how to resolve different
-#   channels, with the same instrument, have overlaping notes
-# - There are tons of edge cases here e.g., what if there are two identical
-#   notes on different channels.
-# - Add information about the config, i.e., which instruments removed
+class RelTokenizer(Tokenizer):
+    """MidiDict tokenizer implemented with relative onset timings.
 
-
-class AbsTokenizer(Tokenizer):
-    """MidiDict tokenizer implemented with absolute onset timings.
-
-    The tokenizer processes MIDI files in 5000ms segments, with each segment
-    separated by a special <T> token. Within each segment, note timings are
-    represented relative to the segment start.
+    Designed to resemble the tokenizer used for MuseNet, this tokenizer
+    represents the passage of time using 'wait' tokens. This format is
+    reminiscent of MIDI, which separates note-on and note-off messages with
+    'wait' messages which record the number of milliseconds to wait
+    before processing the next message.
 
     Tokenization Schema:
         For non-percussion instruments:
             - Each note is represented by three consecutive tokens:
                 1. [instrument, pitch, velocity]: Instrument class, MIDI pitch,
                     and velocity
-                2. [onset]: Absolute time in milliseconds from segment start
-                3. [duration]: Note duration in milliseconds
+                2. [duration]: Note duration in milliseconds
+                3. [wait]: Time in milliseconds to wait before processing the
+                    next note
 
         For percussion instruments:
             - Each note is represented by two consecutive tokens:
                 1. [drum, note_number]: Percussion instrument and MIDI note
                     number
-                2. [onset]: Absolute time in milliseconds from segment start
+                2. [wait]: Time in milliseconds to wait before processing the
+                    next note
 
     Notes:
         - Notes are ordered according to onset time
@@ -62,26 +55,20 @@ class AbsTokenizer(Tokenizer):
             prepended, i.e., before the <S> token
         - Various configuration settings affecting instrument processing,
             timing resolution, quantization levels, and prefix tokens can be
-            adjusted in config.json at 'tokenizer.abs'.
+            adjusted in config.json at 'tokenizer.rel'.
     """
 
-    def __init__(self) -> None:  # Not sure why this is required by
+    def __init__(self) -> None:
         super().__init__()
-        self.config = load_config()["tokenizer"]["abs"]
-        self.name = "abs"
+        self.config = load_config()["tokenizer"]["rel"]
+        self.name = "rel"
 
-        # Calculate time quantizations (in ms)
-        self.abs_time_step_ms: int = self.config["abs_time_step_ms"]
-        self.max_dur_ms: int = self.config["max_dur_ms"]
+        self.max_time_ms: int = self.config["max_time_ms"]
         self.time_step_ms: int = self.config["time_step_ms"]
 
-        self.dur_time_quantizations = [
+        self.time_step_quantizations = [
             self.time_step_ms * i
-            for i in range((self.max_dur_ms // self.time_step_ms) + 1)
-        ]
-        self.onset_time_quantizations = [
-            self.time_step_ms * i
-            for i in range((self.max_dur_ms // self.time_step_ms))
+            for i in range((self.max_time_ms // self.time_step_ms) + 1)
         ]
 
         # Calculate velocity quantizations
@@ -104,9 +91,9 @@ class AbsTokenizer(Tokenizer):
         self.prefix_tokens: list[Token] = [
             ("prefix", "instrument", x) for x in self.instruments_wd
         ]
-        self.composer_names: list[Token] = self.config["composer_names"]
+        self.composer_names: list[str] = self.config["composer_names"]
         self.form_names: list[str] = self.config["form_names"]
-        self.genre_names: list[str] = self.config["genre_names"]
+        self.genre_names: list[str] = self.config["form_names"]
         self.prefix_tokens += [
             ("prefix", "composer", x) for x in self.composer_names
         ]
@@ -114,12 +101,11 @@ class AbsTokenizer(Tokenizer):
         self.prefix_tokens += [("prefix", "genre", x) for x in self.genre_names]
 
         # Build vocab
-        self.time_tok = "<T>"
-        self.onset_tokens: list[Token] = [
-            ("onset", i) for i in self.onset_time_quantizations
+        self.wait_tokens: list[Token] = [
+            ("wait", i) for i in self.time_step_quantizations
         ]
         self.dur_tokens: list[Token] = [
-            ("dur", i) for i in self.dur_time_quantizations
+            ("dur", i) for i in self.time_step_quantizations
         ]
         self.drum_tokens: list[Token] = [("drum", i) for i in range(35, 82)]
 
@@ -131,33 +117,27 @@ class AbsTokenizer(Tokenizer):
             )
         )
 
-        self.special_tokens.append(self.time_tok)
         self.add_tokens_to_vocab(
             self.special_tokens
             + self.prefix_tokens
             + self.note_tokens
             + self.drum_tokens
             + self.dur_tokens
-            + self.onset_tokens
+            + self.wait_tokens
         )
         self.pad_id = self.tok_to_id[self.pad_tok]
 
     def export_data_aug(self) -> list[Callable[[list[Token]], list[Token]]]:
         return [
-            self.export_tempo_aug(max_tempo_aug=0.2, mixup=True),
+            self.export_chord_mixup(),
+            self.export_tempo_aug(max_tempo_aug=0.2),
             self.export_pitch_aug(5),
             self.export_velocity_aug(1),
         ]
 
-    def _quantize_dur(self, time: int) -> int:
+    def _quantize_time(self, time: int) -> int:
         # This function will return values res >= 0 (inc. 0)
-        dur = self._find_closest_int(time, self.dur_time_quantizations)
-
-        return dur if dur != 0 else self.time_step_ms
-
-    def _quantize_onset(self, time: int) -> int:
-        # This function will return values res >= 0 (inc. 0)
-        return self._find_closest_int(time, self.onset_time_quantizations)
+        return self._find_closest_int(time, self.time_step_quantizations)
 
     def _quantize_velocity(self, velocity: int) -> int:
         # This function will return values in the range 0 < res =< 127
@@ -176,78 +156,14 @@ class AbsTokenizer(Tokenizer):
         # If unformatted_seq is longer than 150 tokens insert diminish tok
         idx = -100 + random.randint(-10, 10)
         if len(unformatted_seq) > 150:
-            if (
-                unformatted_seq[idx][0] == "onset"
-            ):  # Don't want: note, <D>, onset, due
+            if unformatted_seq[idx][0] == "dur":  # Don't want: note, <D>, dur
                 unformatted_seq.insert(idx - 1, self.dim_tok)
-            elif (
-                unformatted_seq[idx][0] == "dur"
-            ):  # Don't want: note, onset, <D>, dur
-                unformatted_seq.insert(idx - 2, self.dim_tok)
             else:
                 unformatted_seq.insert(idx, self.dim_tok)
 
         res = prefix + [self.bos_tok] + unformatted_seq + [self.eos_tok]
 
         return res
-
-    def calc_length_ms(self, seq: list[Token], onset: bool = False) -> int:
-        """Calculates sequence time length in milliseconds.
-
-        Args:
-            seq (list[Token]): List of tokens to process.
-            onset (bool): If True, returns onset time of last note instead of
-                total duration.
-
-        Returns:
-            int: Time in milliseconds from start to either:
-                - End of last note if onset=False
-                - Onset of last note if onset=True
-        """
-
-        # Find the index of the last onset or dur token
-        seq = copy.deepcopy(seq)
-        for _idx in range(len(seq) - 1, -1, -1):
-            tok = seq[_idx]
-            if type(tok) is tuple and tok[0] in {"onset", "dur"}:
-                break
-            else:
-                seq.pop()
-
-        time_offset_ms = seq.count(self.time_tok) * self.abs_time_step_ms
-        idx = len(seq) - 1
-        for tok in seq[::-1]:
-            if type(tok) is tuple and tok[0] == "dur":
-                assert seq[idx][0] == "dur", "Expected duration token"
-                assert seq[idx - 1][0] == "onset", "Expect onset token"
-
-                onset_ms = seq[idx - 1][1]
-                duration_ms = seq[idx][1]
-                assert isinstance(onset_ms, int), "Expected int"
-                assert isinstance(duration_ms, int), "Expected int"
-
-                if onset is False:
-                    return time_offset_ms + onset_ms + duration_ms
-                elif onset is True:
-                    return time_offset_ms + onset_ms  # Ignore dur
-
-            idx -= 1
-
-        raise Exception("Invalid sequence format")
-
-    def truncate_by_time(
-        self, tokenized_seq: list[Token], trunc_time_ms: int
-    ) -> list[Token]:
-        """Truncates notes with onset_ms > trunc_time_ms."""
-        time_offset_ms = 0
-        for idx, tok in enumerate(tokenized_seq):
-            if tok == self.time_tok:
-                time_offset_ms += self.abs_time_step_ms
-            elif type(tok) is tuple and tok[0] == "onset":
-                if time_offset_ms + tok[1] > trunc_time_ms:
-                    return tokenized_seq[: idx - 1]
-
-        return tokenized_seq
 
     def _tokenize_midi_dict(
         self, midi_dict: MidiDict, remove_preceding_silence: bool = True
@@ -292,58 +208,50 @@ class AbsTokenizer(Tokenizer):
 
         tokenized_seq: list[Token] = []
 
-        if remove_preceding_silence is False:
-            initial_onset_tick = 0
-        else:
-            initial_onset_tick = midi_dict.note_msgs[0]["data"]["start"]
-
-        curr_time_since_onset = 0
-        for _, msg in enumerate(midi_dict.note_msgs):
-            # Extract msg data
-            _channel = msg["channel"]
-            _pitch = msg["data"]["pitch"]
-            _velocity = msg["data"]["velocity"]
-            _start_tick = msg["data"]["start"]
-            _end_tick = msg["data"]["end"]
-
-            # Calculate time data
-            prev_time_since_onset = curr_time_since_onset
-            curr_time_since_onset = get_duration_ms(
-                start_tick=initial_onset_tick,
-                end_tick=_start_tick,
+        if remove_preceding_silence is False and len(midi_dict.note_msgs) > 0:
+            initial_wait_duration = get_duration_ms(
+                start_tick=0,
+                end_tick=midi_dict.note_msgs[0]["data"]["start"],
                 tempo_msgs=midi_dict.tempo_msgs,
                 ticks_per_beat=ticks_per_beat,
             )
 
-            # Add abs time token if necessary
-            time_toks_to_append = (
-                curr_time_since_onset // self.abs_time_step_ms
-            ) - (prev_time_since_onset // self.abs_time_step_ms)
-            if time_toks_to_append > 0:
-                for _ in range(time_toks_to_append):
-                    tokenized_seq.append(self.time_tok)
+            while initial_wait_duration > self.max_time_ms:
+                tokenized_seq.append(("wait", self.max_time_ms))
+                initial_wait_duration -= self.max_time_ms
 
+            initial_wait_duration = self._quantize_time(initial_wait_duration)
+            if initial_wait_duration != 0:
+                tokenized_seq.append(("wait", initial_wait_duration))
+
+        num_notes = len(midi_dict.note_msgs)
+        for i, msg in enumerate(midi_dict.note_msgs):
             # Special case instrument is a drum. This occurs exclusively when
             # MIDI channel is 9 when 0 indexing
-            if _channel == 9:
-                _note_onset = self._quantize_onset(
-                    curr_time_since_onset % self.abs_time_step_ms
-                )
+            if msg["channel"] == 9:
+                _pitch = msg["data"]["pitch"]
                 tokenized_seq.append(("drum", _pitch))
-                tokenized_seq.append(("onset", _note_onset))
 
             else:  # Non drum case (i.e. an instrument note)
-                _instrument = channel_to_instrument[_channel]
+                _instrument = channel_to_instrument[msg["channel"]]
+                _pitch = msg["data"]["pitch"]
+                _velocity = msg["data"]["velocity"]
+                _start_tick = msg["data"]["start"]
+                _end_tick = msg["data"]["end"]
 
                 # Update _end_tick if affected by pedal
-                for pedal_interval in channel_to_pedal_intervals[_channel]:
+                for pedal_interval in channel_to_pedal_intervals[
+                    msg["channel"]
+                ]:
                     pedal_start, pedal_end = (
                         pedal_interval[0],
                         pedal_interval[1],
                     )
-                    if pedal_start < _end_tick < pedal_end:
+                    if (
+                        pedal_start <= _start_tick < pedal_end
+                        and _end_tick < pedal_end
+                    ):
                         _end_tick = pedal_end
-                        break
 
                 _note_duration = get_duration_ms(
                     start_tick=_start_tick,
@@ -353,14 +261,31 @@ class AbsTokenizer(Tokenizer):
                 )
 
                 _velocity = self._quantize_velocity(_velocity)
-                _note_onset = self._quantize_onset(
-                    curr_time_since_onset % self.abs_time_step_ms
-                )
-                _note_duration = self._quantize_dur(_note_duration)
+                _note_duration = self._quantize_time(_note_duration)
+                if _note_duration == 0:
+                    _note_duration = self.time_step_ms
 
                 tokenized_seq.append((_instrument, _pitch, _velocity))
-                tokenized_seq.append(("onset", _note_onset))
                 tokenized_seq.append(("dur", _note_duration))
+
+            # Only add wait token if there is a msg after the current one
+            if i <= num_notes - 2:
+                _wait_duration = get_duration_ms(
+                    start_tick=msg["data"]["start"],
+                    end_tick=midi_dict.note_msgs[i + 1]["data"]["start"],
+                    tempo_msgs=midi_dict.tempo_msgs,
+                    ticks_per_beat=ticks_per_beat,
+                )
+
+                # If wait duration is longer than maximum quantized time step
+                # append max_time_step tokens repeatedly
+                while _wait_duration > self.max_time_ms:
+                    tokenized_seq.append(("wait", self.max_time_ms))
+                    _wait_duration -= self.max_time_ms
+
+                _wait_duration = self._quantize_time(_wait_duration)
+                if _wait_duration != 0:
+                    tokenized_seq.append(("wait", _wait_duration))
 
         return self._format(
             prefix=prefix,
@@ -407,14 +332,11 @@ class AbsTokenizer(Tokenizer):
 
         # Add non-drum instrument_msgs, breaks at first note token
         channel_idx = 0
-        curr_tick = 0
         for idx, tok in enumerate(tokenized_seq):
             if channel_idx == 9:  # Skip channel reserved for drums
                 channel_idx += 1
 
             if tok in self.special_tokens:
-                if tok == self.time_tok:
-                    curr_tick += self.abs_time_step_ms
                 continue
             elif (
                 tok[0] == "prefix"
@@ -423,7 +345,7 @@ class AbsTokenizer(Tokenizer):
             ):
                 # Process instrument prefix tokens
                 if tok[2] in instrument_to_channel.keys():
-                    logger.warning(f"Duplicate prefix {tok[2]}")
+                    logger.debug(f"Duplicate prefix {tok[2]}")
                     continue
                 elif tok[2] == "drum":
                     instrument_msgs.append(
@@ -446,7 +368,8 @@ class AbsTokenizer(Tokenizer):
                     )
                     instrument_to_channel[tok[2]] = channel_idx
                     channel_idx += 1
-            elif tok in self.prefix_tokens:
+            elif tok[0] == "prefix":
+                # Skip all other prefix tokens
                 continue
             else:
                 # Note, wait, or duration token
@@ -455,47 +378,41 @@ class AbsTokenizer(Tokenizer):
 
         # Note messages
         note_msgs: list[NoteMessage] = []
-        for tok_1, tok_2, tok_3 in zip(
-            tokenized_seq[start:],
-            tokenized_seq[start + 1 :],
-            tokenized_seq[start + 2 :],
+        curr_tick = 0
+        for curr_tok, next_tok in zip(
+            tokenized_seq[start:], tokenized_seq[start + 1 :]
         ):
-            if tok_1 in self.special_tokens:
-                _tok_type_1 = "special"
+            if curr_tok in self.special_tokens:
+                _curr_tok_type = "special"
             else:
-                _tok_type_1 = tok_1[0]
-            if tok_2 in self.special_tokens:
-                _tok_type_2 = "special"
-            else:
-                _tok_type_2 = tok_2[0]
-            if tok_3 in self.special_tokens:
-                _tok_type_3 = "special"
-            else:
-                _tok_type_3 = tok_3[0]
+                _curr_tok_type = curr_tok[0]
 
-            if tok_1 == self.time_tok:
-                curr_tick += self.abs_time_step_ms
+            if next_tok in self.special_tokens:
+                _next_tok_type = "special"
+            else:
+                _next_tok_type = next_tok[0]
 
-            elif (
-                _tok_type_1 == "special"
-                or _tok_type_1 == "prefix"
-                or _tok_type_1 == "onset"
-                or _tok_type_1 == "dur"
+            if (
+                _curr_tok_type == "special"
+                or _curr_tok_type == "prefix"
+                or _curr_tok_type == "dur"
             ):
                 continue
-            elif _tok_type_1 == "drum" and _tok_type_2 == "onset":
+            elif _curr_tok_type == "wait":
                 assert isinstance(
-                    tok_2[1], int
-                ), f"Expected int for onset, got {tok_2[1]}"
+                    curr_tok[1], int
+                ), f"Expected int for wait, got {curr_tok[1]}"
+                curr_tick += curr_tok[1]
+            elif _curr_tok_type == "drum":
                 assert isinstance(
-                    tok_1[1], int
-                ), f"Expected int for pitch, got {tok_1[1]}"
+                    curr_tok[1], int
+                ), f"Expected int for onset, got {curr_tok[1]}"
 
-                _pitch: int = tok_1[1]
+                _pitch = curr_tok[1]
                 _channel = instrument_to_channel["drum"]
-                _velocity: int = self.config["drum_velocity"]
-                _start_tick: int = curr_tick + tok_2[1]
-                _end_tick: int = _start_tick + self.time_step_ms
+                _velocity = self.config["drum_velocity"]
+                _start_tick = curr_tick
+                _end_tick = curr_tick + self.time_step_ms
 
                 note_msgs.append(
                     {
@@ -512,31 +429,27 @@ class AbsTokenizer(Tokenizer):
                 )
 
             elif (
-                _tok_type_1 in self.instruments_nd
-                and _tok_type_2 == "onset"
-                and _tok_type_3 == "dur"
+                _curr_tok_type in self.instruments_nd
+                and _next_tok_type == "dur"
             ):
                 assert isinstance(
-                    tok_1[0], str
-                ), f"Expected str for instrument, got {tok_1[0]}"
+                    curr_tok[0], str
+                ), f"Expected str for instrument, got {curr_tok[0]}"
                 assert isinstance(
-                    tok_1[1], int
-                ), f"Expected int for pitch, got {tok_1[1]}"
+                    curr_tok[1], int
+                ), f"Expected int for pitch, got {curr_tok[1]}"
                 assert isinstance(
-                    tok_1[2], int
-                ), f"Expected int for velocity, got {tok_1[2]}"
+                    curr_tok[2], int
+                ), f"Expected int for velocity, got {curr_tok[2]}"
                 assert isinstance(
-                    tok_2[1], int
-                ), f"Expected int for onset, got {tok_2[1]}"
-                assert isinstance(
-                    tok_3[1], int
-                ), f"Expected int for duration, got {tok_3[1]}"
+                    next_tok[1], int
+                ), f"Expected int for duration, got {next_tok[1]}"
 
-                _instrument = tok_1[0]
-                _pitch = tok_1[1]
-                _velocity = tok_1[2]
-                _start_tick = curr_tick + tok_2[1]
-                _end_tick = _start_tick + tok_3[1]
+                _instrument = curr_tok[0]
+                _pitch = curr_tok[1]
+                _velocity = curr_tok[2]
+                _start_tick = curr_tick
+                _end_tick = curr_tick + next_tok[1]
 
                 if _instrument not in instrument_to_channel.keys():
                     logger.warning(
@@ -557,9 +470,10 @@ class AbsTokenizer(Tokenizer):
                             "channel": _channel,
                         }
                     )
+
             else:
                 logger.warning(
-                    f"Unexpected token sequence: {tok_1}, {tok_2}, {tok_3}"
+                    f"Unexpected token sequence: {curr_tok}, {next_tok}"
                 )
 
         return MidiDict(
@@ -589,7 +503,7 @@ class AbsTokenizer(Tokenizer):
     ) -> Callable[Concatenate[list[Token], ...], list[Token]]:
         """Exports a function that augments the pitch of all note tokens.
 
-        Notes which fall out of the range (0, 127) will be replaced
+        Note that notes which fall out of the range (0, 127) will be replaced
         with the unknown token '<U>'.
 
         Args:
@@ -617,9 +531,8 @@ class AbsTokenizer(Tokenizer):
                     or _tok_type == "prefix"
                     or _tok_type == "dur"
                     or _tok_type == "drum"
-                    or _tok_type == "onset"
+                    or _tok_type == "wait"
                 ):
-                    # Return without changing
                     return tok
                 else:
                     # Return augmented tok
@@ -627,13 +540,6 @@ class AbsTokenizer(Tokenizer):
                         isinstance(tok, tuple) and len(tok) == 3
                     ), f"Invalid note token"
                     (_instrument, _pitch, _velocity) = tok
-
-                    assert isinstance(
-                        _pitch, int
-                    ), f"Expected int for pitch, got {_pitch}"
-                    assert isinstance(
-                        _velocity, int
-                    ), f"Expected int for velocity, got {_velocity}"
 
                     if 0 <= _pitch + _pitch_aug <= 127:
                         return (_instrument, _pitch + _pitch_aug, _velocity)
@@ -645,12 +551,10 @@ class AbsTokenizer(Tokenizer):
 
             return [pitch_aug_tok(x, pitch_aug) for x in src]
 
-        return self.export_aug_fn_concat(
-            functools.partial(
-                pitch_aug_seq,
-                unk_tok=self.unk_tok,
-                _max_pitch_aug=max_pitch_aug,
-            )
+        return functools.partial(
+            pitch_aug_seq,
+            unk_tok=self.unk_tok,
+            _max_pitch_aug=max_pitch_aug,
         )
 
     def export_velocity_aug(
@@ -688,11 +592,12 @@ class AbsTokenizer(Tokenizer):
                     or _tok_type == "prefix"
                     or _tok_type == "dur"
                     or _tok_type == "drum"
-                    or _tok_type == "onset"
+                    or _tok_type == "wait"
                 ):
                     # Return without changing
                     return tok
                 else:
+                    # Return augmented tok
                     assert isinstance(tok, tuple) and len(tok) == 3
                     (_instrument, _pitch, _velocity) = tok
 
@@ -725,18 +630,11 @@ class AbsTokenizer(Tokenizer):
             )
         )
 
-    # TODO: Refactor this logic
+    # TODO: Needs unit test
     def export_tempo_aug(
-        self, max_tempo_aug: float, mixup: bool
+        self, max_tempo_aug: float
     ) -> Callable[Concatenate[list[Token], ...], list[Token]]:
         """Exports a function which augments the tempo of a sequence of tokens.
-
-        Additionally this function performs note-mixup: randomly re-ordering
-        the note subsequences which occur on the same onset.
-
-        IMPORTANT: This function doesn't support additional tokens. If you
-        have modified the tokenizer in any way, this should not be added to
-        export_data_aug.
 
         Args:
             max_tempo_aug (float): Returned function will randomly augment
@@ -747,152 +645,143 @@ class AbsTokenizer(Tokenizer):
             Callable[[list[Token], float], list[Token]]: Exported function.
         """
 
-        def tempo_aug(
-            src: list[Token],
-            abs_time_step: int,
-            max_dur: int,
-            time_step: int,
-            unk_tok: str,
-            time_tok: str,
-            dim_tok: str,
-            start_tok: str,
-            end_tok: str,
-            instruments_wd: list,
-            tokenizer_name: str,
+        def tempo_aug_seq(
+            src: list,
+            time_step_ms: int,
+            max_time_ms: int,
             _max_tempo_aug: float,
-            _mixup: bool,
             tempo_aug: float | None = None,
         ) -> list[Token]:
-            """This must be used with export_aug_fn_concat in order to work
-            properly for concatenated sequences."""
+            def _quantize_time_no_truncate(_n: int | float) -> int:
+                return round(_n / time_step_ms) * time_step_ms
 
-            def _quantize_time(_n: int | float) -> int:
-                return round(_n / time_step) * time_step
+            def _append_wait_tokens(
+                _res: list[Token], _wait_time_ms: int
+            ) -> list[Token]:
+                while _wait_time_ms > max_time_ms:
+                    _res.append(("wait", max_time_ms))
+                    _wait_time_ms -= max_time_ms
 
-            assert (
-                tokenizer_name == "abs"
-            ), f"Augmentation function only supports base AbsTokenizer"
+                _wait_time_ms = min(
+                    _quantize_time_no_truncate(_wait_time_ms),
+                    max_time_ms,
+                )
+                if _wait_time_ms != 0:
+                    _res.append(("wait", _wait_time_ms))
+
+                return res
 
             if tempo_aug is None:
                 tempo_aug = random.uniform(
-                    1 - _max_tempo_aug, 1 + _max_tempo_aug
+                    1 - max_tempo_aug, 1 + _max_tempo_aug
                 )
 
-            src_time_tok_cnt = 0
-            dim_tok_seen = None
-            res: list[Token] = []
-            note_buffer: dict[str, Token | None] | None = None
-
-            # Buffer tracks
-            buffer: dict[int, dict[int, list[dict[str, Token | None]]]] = (
-                defaultdict(lambda: defaultdict(list))
-            )
-            for tok_1, tok_2, tok_3 in zip(src, src[1:], src[2:]):
-                if tok_1 == time_tok:
-                    _tok_type = "time"
-                elif tok_1 == unk_tok:
-                    _tok_type = "unk"
-                elif tok_1 == start_tok:
-                    res.append(tok_1)
+            res = []
+            wait_time_ms: float = 0
+            src_ms: int = 0
+            tgt_ms: float = 0
+            for tok in src:
+                if (
+                    isinstance(tok, str) or tok[1] == "prefix"
+                ):  # Stand in for SpecialToken
+                    res.append(tok)
                     continue
-                elif tok_1 == dim_tok and note_buffer is not None:
-                    assert isinstance(note_buffer["onset"], tuple)
-                    dim_tok_seen = (src_time_tok_cnt, note_buffer["onset"][1])
-                    continue
-                elif tok_1[0] == "prefix":
-                    res.append(tok_1)
-                    continue
-                elif tok_1[0] in instruments_wd:
-                    _tok_type = tok_1[0]
                 else:
-                    # This only triggers for incomplete notes at the beginning,
-                    # e.g. an onset token before a note token is seen
-                    continue
+                    tok_type = tok[0]
 
-                if _tok_type == "time":
-                    src_time_tok_cnt += 1
-                elif _tok_type == "drum":
-                    assert isinstance(tok_2[1], int)
-                    note_buffer = {
-                        "note": tok_1,
-                        "onset": tok_2,
-                        "dur": None,
-                    }
-                    buffer[src_time_tok_cnt][tok_2[1]].append(note_buffer)
-                else:  # unk or in instruments_wd
-                    assert isinstance(tok_2[1], int)
-                    note_buffer = {
-                        "note": tok_1,
-                        "onset": tok_2,
-                        "dur": tok_3,
-                    }
-                    buffer[src_time_tok_cnt][tok_2[1]].append(note_buffer)
-
-            prev_tgt_time_tok_cnt = 0
-            for src_time_tok_cnt, interval_notes in sorted(buffer.items()):
-                for src_onset, notes_by_onset in sorted(interval_notes.items()):
-                    src_time = src_time_tok_cnt * abs_time_step + src_onset
-                    tgt_time = _quantize_time(src_time * tempo_aug)
-                    curr_tgt_time_tok_cnt = tgt_time // abs_time_step
-                    curr_tgt_onset = tgt_time % abs_time_step
-
-                    if curr_tgt_onset == abs_time_step:
-                        curr_tgt_onset -= time_step
-
-                    for _ in range(
-                        curr_tgt_time_tok_cnt - prev_tgt_time_tok_cnt
-                    ):
-                        res.append(time_tok)
-                    prev_tgt_time_tok_cnt = curr_tgt_time_tok_cnt
-
-                    if _mixup == True:
-                        random.shuffle(notes_by_onset)
-
-                    for note in notes_by_onset:
-                        _src_note_tok = note["note"]
-                        _src_dur_tok = note["dur"]
-                        assert _src_note_tok is not None
-
-                        if _src_dur_tok is not None:
-                            assert isinstance(_src_dur_tok[1], int)
-                            tgt_dur = _quantize_time(
-                                _src_dur_tok[1] * tempo_aug
-                            )
-                            tgt_dur = min(tgt_dur, max_dur)
-                        else:
-                            tgt_dur = None
-
-                        res.append(_src_note_tok)
-                        res.append(("onset", curr_tgt_onset))
-                        if tgt_dur:
-                            res.append(("dur", tgt_dur))
-
-                        if dim_tok_seen is not None and dim_tok_seen == (
-                            src_time_tok_cnt,
-                            src_onset,
-                        ):
-                            res.append(dim_tok)
-                            dim_tok_seen = None
-
-            if src[-1] == end_tok:
-                res.append(end_tok)
+                if tok_type == "wait":
+                    src_ms += tok[1]
+                    wait_time_ms += (src_ms * tempo_aug) - tgt_ms
+                    tgt_ms += tempo_aug * tok[1]
+                elif tok_type == "dur":
+                    dur_ms = min(
+                        _quantize_time_no_truncate(tok[1] * tempo_aug),
+                        max_time_ms,
+                    )
+                    res.append(("dur", dur_ms))
+                else:  # Note msg
+                    res = _append_wait_tokens(
+                        res, _quantize_time_no_truncate(wait_time_ms)
+                    )
+                    res.append(tok)
+                    wait_time_ms = 0
 
             return res
 
         return self.export_aug_fn_concat(
             functools.partial(
-                tempo_aug,
-                abs_time_step=self.abs_time_step_ms,
-                max_dur=self.max_dur_ms,
-                time_step=self.time_step_ms,
-                unk_tok=self.unk_tok,
-                time_tok=self.time_tok,
-                dim_tok=self.dim_tok,
-                end_tok=self.eos_tok,
-                start_tok=self.bos_tok,
-                instruments_wd=self.instruments_wd,
-                tokenizer_name=self.name,
+                tempo_aug_seq,
+                time_step_ms=self.time_step_ms,
+                max_time_ms=self.max_time_ms,
                 _max_tempo_aug=max_tempo_aug,
-                _mixup=mixup,
+            )
+        )
+
+    def export_chord_mixup(
+        self,
+    ) -> Callable[Concatenate[list[Token], ...], list[Token]]:
+        """Exports a function which augments order of concurrent note tokens.
+
+        Concurrent note tokens are those which are not separated by a wait
+        token.
+
+        Returns:
+            Callable[[list[Token]], list[Token]]: Exported function.
+        """
+
+        def chord_mixup(src: list[Token], unk_tok: str) -> list[Token]:
+            stack: list[dict[str, Token]] = []
+            for idx, tok in enumerate(src):
+                if isinstance(tok, str):
+                    tok_type = "special"
+                else:
+                    tok_type = tok[0]
+
+                if (
+                    tok_type == "special" or tok_type == "prefix"
+                ) and tok != unk_tok:
+                    # Skip special tok (when not unk), reset stack to be safe
+                    stack = []
+                elif tok_type == "wait" and len(stack) <= 1:
+                    # Reset stack as it only contains one note
+                    stack = []
+                elif tok_type == "wait" and len(stack) > 1:
+                    # Stack contains more than one note -> mix-up stack.
+                    random.shuffle(stack)
+                    num_toks = sum(len(note) for note in stack)
+                    _idx = idx - num_toks
+
+                    while stack:
+                        entry = stack.pop()
+                        if entry["note"] == unk_tok:
+                            # This can happen if the note token has its pitch
+                            # augmented out of the valid range. In this case we
+                            # do not want to index it as it is not a note token
+                            src[_idx] = entry["note"]
+                            src[_idx + 1] = entry["dur"]
+                            _idx += 2
+                        elif entry["note"][0] == "drum":
+                            # Drum case doesn't require a duration token
+                            src[_idx] = entry["note"]
+                            _idx += 1
+                        else:
+                            src[_idx] = entry["note"]
+                            src[_idx + 1] = entry["dur"]
+                            _idx += 2
+
+                elif tok_type == "dur":
+                    # Add dur to previously added note token if exists
+                    if stack:
+                        stack[-1]["dur"] = tok
+                else:
+                    # Note token -> append to stack
+                    stack.append({"note": tok})
+
+            return src
+
+        return self.export_aug_fn_concat(
+            functools.partial(
+                chord_mixup,
+                unk_tok=self.unk_tok,
             )
         )
