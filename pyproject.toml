@@ -31,10 +31,9 @@ dev = [
     "pytest",
 ]
 
-
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["ariautils.*"]
+include = ["ariautils", "ariautils.*"]
 
 [tool.setuptools.package-data]
 ariautils = ["config/*.json"]
