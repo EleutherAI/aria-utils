@@ -191,7 +191,7 @@ class MidiDict:
     def to_midi(self) -> mido.MidiFile:
         """Inplace version of dict_to_midi."""
 
-        return dict_to_midi(self.get_msg_dict())
+        return dict_to_midi(self.resolve_overlaps().get_msg_dict())
 
     @classmethod
     def from_msg_dict(cls, msg_dict: MidiDictData) -> "MidiDict":

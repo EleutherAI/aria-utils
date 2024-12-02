@@ -5,6 +5,7 @@ import itertools
 import random
 import copy
 
+from pathlib import Path
 from collections import defaultdict
 from typing import Final, Callable, Any, Concatenate
 
@@ -65,9 +66,9 @@ class AbsTokenizer(Tokenizer):
             adjusted in config.json at 'tokenizer.abs'.
     """
 
-    def __init__(self) -> None:  # Not sure why this is required by
+    def __init__(self, config_path: Path | str | None = None) -> None:
         super().__init__()
-        self.config = load_config()["tokenizer"]["abs"]
+        self.config = load_config(config_path)["tokenizer"]["abs"]
         self.name = "abs"
 
         # Calculate time quantizations (in ms)

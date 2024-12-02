@@ -19,9 +19,7 @@ Token: TypeAlias = tuple[Any, ...] | str
 class Tokenizer:
     """Abstract Tokenizer class for tokenizing MidiDict objects."""
 
-    def __init__(
-        self,
-    ) -> None:
+    def __init__(self) -> None:
         self.name: str = ""
 
         self.bos_tok: Final[SpecialToken] = "<S>"

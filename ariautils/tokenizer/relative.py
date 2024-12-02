@@ -4,6 +4,7 @@ import functools
 import itertools
 import random
 
+from pathlib import Path
 from typing import Final, Callable, Any, Concatenate
 
 from ariautils.midi import (
@@ -58,9 +59,9 @@ class RelTokenizer(Tokenizer):
             adjusted in config.json at 'tokenizer.rel'.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, config_path: Path | str | None = None) -> None:
         super().__init__()
-        self.config = load_config()["tokenizer"]["rel"]
+        self.config = load_config(config_path)["tokenizer"]["rel"]
         self.name = "rel"
 
         self.max_time_ms: int = self.config["max_time_ms"]
