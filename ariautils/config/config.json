@@ -32,6 +32,29 @@
                 "args": {
                     "min_seconds": 30
                 }
+            },
+            "silent_interval":{
+                "run": false,
+                "args": {
+                    "max_silence_s": 30
+                }
+            },
+            "unique_pitch_count":{
+                "run": false,
+                "args": {
+                    "min_num_unique_pitches": 8
+                }
+            },
+            "unique_pitch_count_in_interval":{
+                "run": false,
+                "args": {
+                    "test_params": 
+                    [
+                        {"min_unique_pitch_cnt": 2, "interval_len_s": 20}, 
+                        {"min_unique_pitch_cnt": 3, "interval_len_s": 30},
+                        {"min_unique_pitch_cnt": 5, "interval_len_s": 90}
+                    ]
+                }
             }
         },
         "pre_processing": {
