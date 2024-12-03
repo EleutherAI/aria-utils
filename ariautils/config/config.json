@@ -34,7 +34,7 @@
                 }
             },
             "silent_interval":{
-                "run": true,
+                "run": false,
                 "args": {
                     "max_silence_s": 30
                 }
