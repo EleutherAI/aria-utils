@@ -9,11 +9,12 @@ import unicodedata
 import mido
 
 from mido.midifiles.units import tick2second
-from collections import defaultdict
+from collections import defaultdict, deque
 from pathlib import Path
 from typing import (
     Any,
     Final,
+    Deque,
     Concatenate,
     Callable,
     TypeAlias,
@@ -22,12 +23,14 @@ from typing import (
     cast,
 )
 
-from ariautils.utils import load_config, load_maestro_metadata_json
+from ariautils.utils import load_config, load_maestro_metadata_json, get_logger
 
+logger = get_logger(__package__)
 
 # TODO:
 # - Remove unneeded comments
-# - Add asserts
+# - Add asserts (e.g., for test and metadata functions)
+# - Add docstrings to test_ functions
 
 
 class MetaMessage(TypedDict):
@@ -1136,6 +1139,136 @@ def test_min_length(
         return True, total_duration_ms / 1e3
 
 
+def test_silent_interval(
+    midi_dict: MidiDict, max_silence_s: float
+) -> tuple[bool, float]:
+    if not midi_dict.note_msgs or not midi_dict.tempo_msgs:
+        return False, 0.0
+
+    longest_silence_s: float = 0.0
+    last_note_end_tick = midi_dict.note_msgs[0]["data"]["end"]
+
+    for note_msg in midi_dict.note_msgs[1:]:
+        note_start_tick = note_msg["data"]["start"]
+
+        if note_start_tick > last_note_end_tick:
+            longest_silence_s = max(
+                longest_silence_s,
+                get_duration_ms(
+                    start_tick=last_note_end_tick,
+                    end_tick=note_start_tick,
+                    tempo_msgs=midi_dict.tempo_msgs,
+                    ticks_per_beat=midi_dict.ticks_per_beat,
+                )
+                / 1000.0,
+            )
+
+            if longest_silence_s >= max_silence_s:
+                return False, longest_silence_s
+
+        last_note_end_tick = max(last_note_end_tick, note_msg["data"]["end"])
+
+    return True, longest_silence_s
+
+
+def test_unique_pitch_count(
+    midi_dict: MidiDict, min_num_unique_pitches: int
+) -> tuple[bool, int]:
+    if not midi_dict.note_msgs:
+        return False, 0
+
+    present_pitches = {
+        note_msg["data"]["pitch"]
+        for note_msg in midi_dict.note_msgs
+        if note_msg["channel"] != 9
+    }
+
+    unique_pitches = len(present_pitches)
+    if unique_pitches < min_num_unique_pitches:
+        return False, unique_pitches
+    else:
+        return True, unique_pitches
+
+
+def _test_unique_pitch_count_in_interval(
+    midi_dict: MidiDict,
+    min_unique_pitch_cnt: int,
+    interval_len_s: int,
+) -> tuple[bool, int]:
+    if not midi_dict.note_msgs:
+        return False, 0
+
+    note_events = [
+        (
+            note_msg["data"]["pitch"],
+            midi_dict.tick_to_ms(note_msg["data"]["start"]),
+        )
+        for note_msg in midi_dict.note_msgs
+        if note_msg["channel"] != 9
+    ]
+    note_events = sorted(note_events, key=lambda x: x[1])
+
+    WINDOW_STEP_S: Final[int] = 1
+    interval_start_s = (
+        midi_dict.tick_to_ms(midi_dict.note_msgs[0]["tick"]) / 1000.0
+    )
+    min_window_pitch_count_seen = 128
+    end_idx = 0
+    notes_in_window: Deque[tuple[int, int]] = deque()
+    while end_idx < len(note_events):
+        interval_end_s = interval_start_s + interval_len_s
+
+        for note_msg_tuple in note_events[end_idx:]:
+            _, _start_ms = note_msg_tuple
+            _start_s = _start_ms / 1000.0
+            if _start_s <= interval_end_s:
+                notes_in_window.append(note_msg_tuple)
+                end_idx += 1
+            else:
+                break
+
+        if len(notes_in_window) > 0:
+            while notes_in_window:
+                _, _start_ms = notes_in_window[0]
+                _start_s = _start_ms / 1000.0
+                if _start_s < interval_start_s:
+                    notes_in_window.popleft()
+                else:
+                    break
+
+        unique_pitches_in_window = {
+            note_tuple[0] for note_tuple in notes_in_window
+        }
+
+        min_window_pitch_count_seen = min(
+            min_window_pitch_count_seen,
+            len(unique_pitches_in_window),
+        )
+
+        interval_start_s += WINDOW_STEP_S
+
+    if min_window_pitch_count_seen < min_unique_pitch_cnt:
+        return False, min_window_pitch_count_seen
+    else:
+        return True, min_window_pitch_count_seen
+
+
+def test_unique_pitch_count_in_interval(
+    midi_dict: MidiDict, test_params_list: list[dict]
+) -> tuple[bool, int]:
+
+    for test_params in test_params_list:
+        success, val = _test_unique_pitch_count_in_interval(
+            midi_dict=midi_dict,
+            min_unique_pitch_cnt=test_params["min_unique_pitch_cnt"],
+            interval_len_s=test_params["interval_len_s"],
+        )
+        if success is False:
+            return False, val
+
+    return True, val
+
+
 def get_test_fn(
     test_name: str,
 ) -> Callable[Concatenate[MidiDict, ...], tuple[bool, Any]]:
@@ -1147,6 +1280,9 @@ def get_test_fn(
         "total_note_frequency": test_note_frequency,
         "note_frequency_per_instrument": test_note_frequency_per_instrument,
         "min_length": test_min_length,
+        "silent_interval": test_silent_interval,
+        "unique_pitch_count": test_unique_pitch_count,
+        "unique_pitch_count_in_interval": test_unique_pitch_count_in_interval,
     }
 
     fn = name_to_fn.get(test_name, None)
