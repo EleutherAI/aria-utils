@@ -1203,7 +1203,7 @@ def _test_unique_pitch_count_in_interval(
         midi_dict.tick_to_ms(midi_dict.note_msgs[0]["tick"]) / 1000.0
     )
     min_window_pitch_count_seen = 128
-    min_window_start_s = 0
+    min_window_start_s = 0.0
     end_idx = 0
     notes_in_window: Deque[tuple[int, int]] = deque()
     while end_idx < len(note_events):
@@ -1231,10 +1231,6 @@ def _test_unique_pitch_count_in_interval(
             note_tuple[0] for note_tuple in notes_in_window
         }
 
-        min_window_pitch_count_seen = min(
-            min_window_pitch_count_seen,
-            len(unique_pitches_in_window),
-        )
         if len(unique_pitches_in_window) < min_window_pitch_count_seen:
             min_window_pitch_count_seen = len(unique_pitches_in_window)
             min_window_start_s = interval_start_s
