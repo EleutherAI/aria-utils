@@ -1184,9 +1184,9 @@ def _test_unique_pitch_count_in_interval(
     midi_dict: MidiDict,
     min_unique_pitch_cnt: int,
     interval_len_s: int,
-) -> tuple[bool, int]:
+) -> tuple[bool, tuple[int, float]]:
     if not midi_dict.note_msgs:
-        return False, 0
+        return False, (0, 0)
 
     note_events = [
         (
@@ -1203,6 +1203,7 @@ def _test_unique_pitch_count_in_interval(
         midi_dict.tick_to_ms(midi_dict.note_msgs[0]["tick"]) / 1000.0
     )
     min_window_pitch_count_seen = 128
+    min_window_start_s = 0
     end_idx = 0
     notes_in_window: Deque[tuple[int, int]] = deque()
     while end_idx < len(note_events):
@@ -1234,29 +1235,39 @@ def _test_unique_pitch_count_in_interval(
             min_window_pitch_count_seen,
             len(unique_pitches_in_window),
         )
+        if len(unique_pitches_in_window) < min_window_pitch_count_seen:
+            min_window_pitch_count_seen = len(unique_pitches_in_window)
+            min_window_start_s = interval_start_s
 
         interval_start_s += WINDOW_STEP_S
 
     if min_window_pitch_count_seen < min_unique_pitch_cnt:
-        return False, min_window_pitch_count_seen
+        return False, (min_window_pitch_count_seen, min_window_start_s)
     else:
-        return True, min_window_pitch_count_seen
+        return True, (min_window_pitch_count_seen, min_window_start_s)
 
 
 def test_unique_pitch_count_in_interval(
     midi_dict: MidiDict, test_params_list: list[dict]
-) -> tuple[bool, int]:
+) -> tuple[bool, tuple[int, int, float]]:
 
     for test_params in test_params_list:
-        success, val = _test_unique_pitch_count_in_interval(
-            midi_dict=midi_dict,
-            min_unique_pitch_cnt=test_params["min_unique_pitch_cnt"],
-            interval_len_s=test_params["interval_len_s"],
+        success, (pitch_cnt, window_start_s) = (
+            _test_unique_pitch_count_in_interval(
+                midi_dict=midi_dict,
+                min_unique_pitch_cnt=test_params["min_unique_pitch_cnt"],
+                interval_len_s=test_params["interval_len_s"],
+            )
         )
-        if success is False:
-            return False, val
 
-    return True, val
+        if success is False:
+            return False, (
+                test_params["interval_len_s"],
+                pitch_cnt,
+                window_start_s,
+            )
+
+    return True, (test_params["interval_len_s"], pitch_cnt, window_start_s)
 
 
 def get_test_fn(
