@@ -895,9 +895,9 @@ def _match_word(text: str, word: str) -> bool:
 
 
 def meta_composer_filename(
-    midi_dict_data: MidiDictData, composer_names: list
+    midi_dict: MidiDict, composer_names: list
 ) -> dict[str, str]:
-    abs_load_path = midi_dict_data["metadata"].get("abs_load_path")
+    abs_load_path = midi_dict.metadata.get("abs_load_path")
     if abs_load_path is None:
         return {}
 
@@ -915,10 +915,8 @@ def meta_composer_filename(
         return {}
 
 
-def meta_form_filename(
-    midi_dict_data: MidiDictData, form_names: list
-) -> dict[str, str]:
-    abs_load_path = midi_dict_data["metadata"].get("abs_load_path")
+def meta_form_filename(midi_dict: MidiDict, form_names: list) -> dict[str, str]:
+    abs_load_path = midi_dict.metadata.get("abs_load_path")
     if abs_load_path is None:
         return {}
 
@@ -937,10 +935,10 @@ def meta_form_filename(
 
 
 def meta_composer_metamsg(
-    midi_dict_data: MidiDictData, composer_names: list
+    midi_dict: MidiDict, composer_names: list
 ) -> dict[str, str]:
     matched_names_unique = set()
-    for msg in midi_dict_data["meta_msgs"]:
+    for msg in midi_dict.meta_msgs:
         for name in composer_names:
             if _match_word(msg["data"], name):
                 matched_names_unique.add(name)
@@ -955,7 +953,7 @@ def meta_composer_metamsg(
 
 # TODO: Needs testing
 def meta_maestro_json(
-    midi_dict_data: MidiDictData,
+    midi_dict: MidiDict,
     composer_names: list,
     form_names: list,
 ) -> dict[str, str]:
@@ -967,7 +965,7 @@ def meta_maestro_json(
     the form file_name: {"composer": str, "title": str}.
     """
 
-    abs_load_path = midi_dict_data["metadata"].get("abs_load_path")
+    abs_load_path = midi_dict.metadata.get("abs_load_path")
     if abs_load_path is None:
         return {}
 
@@ -1000,10 +998,10 @@ def meta_maestro_json(
 # TODO: Add metadata function compatible with aria-midi
 def get_metadata_fn(
     metadata_process_name: str,
-) -> Callable[Concatenate[MidiDictData, ...], dict[str, str]]:
+) -> Callable[Concatenate[MidiDict, ...], dict[str, str]]:
     name_to_fn: dict[
         str,
-        Callable[Concatenate[MidiDictData, ...], dict[str, str]],
+        Callable[Concatenate[MidiDict, ...], dict[str, str]],
     ] = {
         "composer_filename": meta_composer_filename,
         "composer_metamsg": meta_composer_metamsg,

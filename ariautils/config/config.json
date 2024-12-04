@@ -1,29 +1,4 @@
 {
-    "data": {
-        "pre_processing": {
-            "remove_instruments": {
-                "run": true,
-                "args": {
-                    "piano": false,
-                    "chromatic": true,
-                    "organ": false,
-                    "guitar": false,
-                    "bass": false,
-                    "strings": false,
-                    "ensemble": false,
-                    "brass": false,
-                    "reed": false,
-                    "pipe": false,
-                    "synth_lead": false,
-                    "synth_pad": true,
-                    "synth_effect": true,
-                    "ethnic": true,
-                    "percussive": true,
-                    "sfx": true
-                }
-            }
-        }
-    },
     "tokenizer": {
         "rel": {
             "ignore_instruments": {
