@@ -8,7 +8,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Final
 
-from ariautils.midi import MidiDict
+from ariautils.midi import MidiDict, get_test_fn
 from ariautils.utils import get_logger
 
 
