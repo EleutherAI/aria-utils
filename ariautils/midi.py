@@ -643,7 +643,6 @@ def midi_to_dict(mid: mido.MidiFile) -> MidiDictData:
             time signatures, key signatures, and other musical events.
     """
 
-    metadata_config = load_config()["data"]["metadata"]
     # Convert time in mid to absolute
     for track in mid.tracks:
         curr_tick = 0
@@ -685,20 +684,6 @@ def midi_to_dict(mid: mido.MidiFile) -> MidiDictData:
     midi_dict_data["note_msgs"] = sorted(
         midi_dict_data["note_msgs"], key=lambda x: x["tick"]
     )
-
-    for metadata_process_name, metadata_process_config in metadata_config[
-        "functions"
-    ].items():
-        if metadata_process_config["run"] is True:
-            metadata_fn = get_metadata_fn(
-                metadata_process_name=metadata_process_name
-            )
-            fn_args: dict = metadata_process_config["args"]
-
-            collected_metadata = metadata_fn(mid, midi_dict_data, **fn_args)
-            if collected_metadata:
-                for k, v in collected_metadata.items():
-                    midi_dict_data["metadata"][k] = v
 
     return midi_dict_data
 
