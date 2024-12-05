@@ -1455,8 +1455,8 @@ def test_note_timing_entropy(
         note_onset_deltas.append(note_onset_delta_ms)
 
     total = len(note_lens)
-    len_counts = {}
-    onset_deltas_counts = {}
+    len_counts: dict[float, int] = {}
+    onset_deltas_counts: dict[float, int] = {}
     for interval in note_lens:
         len_counts[interval] = len_counts.get(interval, 0) + 1
     for interval in note_onset_deltas:
@@ -1504,7 +1504,7 @@ def test_note_pitch_entropy(
         pitches.append(msg["data"]["pitch"])
 
     total = len(pitches)
-    counts = {}
+    counts: dict[int, int] = {}
     for interval in pitches:
         counts[interval] = counts.get(interval, 0) + 1
 
