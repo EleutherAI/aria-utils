@@ -1709,7 +1709,7 @@ def test_repetitive_content(
         total = sum(curr_chunk_pitches.values())
         if total > 0:
             distribution: dict[int, float] = {
-                k: v / total for k, v in curr_chunk_pitches.items()
+                k: v / total for k, v in curr_chunk_pitches.items() if v > 0
             }
             chunk_distributions.append(distribution)
 
