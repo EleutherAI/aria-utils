@@ -1225,7 +1225,7 @@ def test_mean_note_len(
     ]
 
     mean_length = sum(note_lengths) / len(note_lengths)
-    is_valid = min_mean_len <= mean_length <= max_mean_len
+    is_valid = min_mean_len_ms <= mean_length <= max_mean_len_ms
 
     return is_valid, mean_length
 
