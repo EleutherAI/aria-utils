@@ -1456,7 +1456,7 @@ def _test_note_density_in_interval(
     max_allowed_notes = max_notes_per_second * interval_len_s
     return (
         max_window_note_count_seen <= max_allowed_notes,
-        (max_window_note_count_seen, max_window_start_s),
+        (max_window_note_count_seen / interval_len_s, max_window_start_s),
     )
 
 
@@ -1475,7 +1475,7 @@ def test_note_density_in_interval(
         bool: True if all tests passed, else False
         tuple[int, int, float]: Result from first failure or final test:
             - interval_len_s: Window length in seconds
-            - note_cnt: Number of notes found in window
+            - max_notes_per_second: Maximum notes per second seen
             - window_start_s: Start time of the window in seconds
     """
 
