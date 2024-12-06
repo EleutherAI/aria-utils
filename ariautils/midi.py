@@ -1533,7 +1533,6 @@ def test_note_density_in_interval(
     )
 
 
-# 2.5-3.0 seems like a good pretraining threshold
 def test_note_timing_entropy(
     midi_dict: MidiDict,
     min_length_entropy: float,
@@ -1603,7 +1602,6 @@ def test_note_timing_entropy(
     return is_valid, (len_entropy, onset_delta_entropy)
 
 
-# 3.0 feels about right for pretraining
 def test_note_pitch_entropy(
     midi_dict: MidiDict, min_entropy: float
 ) -> tuple[bool, float]:
@@ -1642,6 +1640,105 @@ def test_note_pitch_entropy(
     return is_valid, entropy
 
 
+def test_repetitive_content(
+    midi_dict: MidiDict,
+    min_length_m: float,
+    num_chunks: int,
+    kl_tolerance: float,
+) -> tuple[bool, float]:
+    """Tests if a MIDI file is repetitive by comparing pitch distributions.
+
+    Calculates KL-Divergence between pitch distributions for evenly spaced
+    chunks:
+
+    https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence
+
+    Args:
+        midi_dict (MidiDict): MidiDict to test.
+        min_length_m: Minimum length in minutes required for the test.
+        num_chunks: Number of chunks to divide the MIDI file into.
+        kl_tolerance: Maximum allowed KL-divergence between distributions
+            Lower values mean distributions must be more similar.
+
+    Returns:
+        bool: False if KL-divergence within tolerance.
+        float: Maximum KL-divergence found between any two chunks.
+    """
+    note_msgs_nd = [msg for msg in midi_dict.note_msgs if msg["channel"] != 9]
+    if not note_msgs_nd:
+        return False, 0.0
+
+    start_time_s = (
+        midi_dict.tick_to_ms(note_msgs_nd[0]["data"]["start"]) / 1000.0
+    )
+    end_time_s = (
+        midi_dict.tick_to_ms(note_msgs_nd[-1]["data"]["start"]) / 1000.0
+    )
+    duration_s = end_time_s - start_time_s
+
+    if duration_s / 60.0 < min_length_m:
+        return True, 0.0
+
+    chunk_size_s = duration_s / num_chunks
+    chunk_distributions: list[dict[int, float]] = []
+    chunk_boundaries_s = [
+        start_time_s + (i * chunk_size_s) for i in range(num_chunks + 1)
+    ]
+
+    curr_chunk = 0
+    msg_idx = 0
+    while curr_chunk < num_chunks and msg_idx < len(note_msgs_nd):
+        chunk_start_ms = chunk_boundaries_s[curr_chunk] * 1000.0
+        chunk_end_ms = chunk_boundaries_s[curr_chunk + 1] * 1000.0
+
+        curr_chunk_pitches: dict[int, int] = {p: 0 for p in range(0, 128)}
+        while msg_idx < len(note_msgs_nd):
+            note_start_ms = midi_dict.tick_to_ms(
+                note_msgs_nd[msg_idx]["data"]["start"]
+            )
+
+            if note_start_ms >= chunk_end_ms:
+                break
+
+            if note_start_ms >= chunk_start_ms:
+                pitch = note_msgs_nd[msg_idx]["data"]["pitch"]
+                curr_chunk_pitches[pitch] += 1
+
+            msg_idx += 1
+
+        total = sum(curr_chunk_pitches.values())
+        if total > 0:
+            distribution: dict[int, float] = {
+                k: v / total for k, v in curr_chunk_pitches.items()
+            }
+            chunk_distributions.append(distribution)
+
+        curr_chunk += 1
+
+    if len(chunk_distributions) < 2:
+        return True, 0.0
+
+    # Calculate KL divergence between all pairs of distributions
+    max_kl = 0.0
+    for i in range(len(chunk_distributions)):
+        for j in range(i + 1, len(chunk_distributions)):
+            dist1 = chunk_distributions[i]
+            dist2 = chunk_distributions[j]
+
+            kl_div = 0.0
+            for pitch in range(0, 128):
+                p = dist1.get(pitch, 1e-5)
+                q = dist2.get(pitch, 1e-5)
+                kl_div += p * log2(p / q)
+
+            max_kl = max(max_kl, abs(kl_div))
+
+    is_valid = max_kl > kl_tolerance
+
+    return is_valid, max_kl
+
+
+# TODO: Refactor tests into a new module
 def get_test_fn(
     test_name: str,
 ) -> Callable[Concatenate[MidiDict, ...], tuple[bool, Any]]:
@@ -1661,6 +1758,7 @@ def get_test_fn(
         "note_density_in_interval": test_note_density_in_interval,
         "note_timing_entropy": test_note_timing_entropy,
         "note_pitch_entropy": test_note_pitch_entropy,
+        "repetitive_content": test_repetitive_content,
     }
 
     fn = name_to_fn.get(test_name, None)
