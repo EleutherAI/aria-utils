@@ -1460,7 +1460,7 @@ def _test_note_density_in_interval(
     )
 
 
-def test_note_density_in_intervals(
+def test_note_density_in_interval(
     midi_dict: "MidiDict", test_params_list: list[dict]
 ) -> tuple[bool, tuple[int, int, float]]:
     """Tests if note density exceeds thresholds within sliding time windows.
@@ -1621,7 +1621,7 @@ def get_test_fn(
         "silent_interval": test_silent_interval,
         "unique_pitch_count": test_unique_pitch_count,
         "unique_pitch_count_in_interval": test_unique_pitch_count_in_interval,
-        "note_density_in_intervals": test_note_density_in_intervals,
+        "note_density_in_interval": test_note_density_in_interval,
         "note_timing_entropy": test_note_timing_entropy,
         "note_pitch_entropy": test_note_pitch_entropy,
     }
