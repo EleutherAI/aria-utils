@@ -23,7 +23,7 @@ from typing import (
     cast,
 )
 
-from ariautils.utils import load_config, load_maestro_metadata_json, get_logger
+from ariautils.utils import load_maestro_metadata_json, get_logger
 
 logger = get_logger(__package__)
 
@@ -1199,15 +1199,15 @@ def test_mean_note_velocity(
 
 def test_mean_note_len(
     midi_dict: MidiDict,
-    min_mean_len: float,
-    max_mean_len: float,
+    min_mean_len_ms: float,
+    max_mean_len_ms: float,
 ) -> tuple[bool, float]:
     """Tests the average note length of MIDI messages in milliseconds.
 
     Args:
         midi_dict (MidiDict): MidiDict to test.
-        min_mean_len (float): Minimum average note length.
-        max_mean_len (float): Maximum average note length.
+        min_mean_len_ms (float): Minimum average note length.
+        max_mean_len_ms (float): Maximum average note length.
 
     Returns:
         bool: True if passed test, else False.
