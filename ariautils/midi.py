@@ -1321,7 +1321,7 @@ def _test_unique_pitch_count_in_interval(
     if not note_events:
         return False, (0, 0)
 
-    WINDOW_STEP_S: Final[int] = 1
+    WINDOW_STEP_S: Final[float] = 1
     interval_start_s = (
         midi_dict.tick_to_ms(midi_dict.note_msgs[0]["tick"]) / 1000.0
     )
@@ -1410,90 +1410,127 @@ def test_unique_pitch_count_in_interval(
 def _test_note_density_in_interval(
     midi_dict: "MidiDict",
     max_notes_per_second: int,
+    max_notes_per_second_per_pitch: int,
     interval_len_s: float,
-) -> tuple[bool, tuple[int, float]]:
-    start_times_ms = [
-        midi_dict.tick_to_ms(note_msg["data"]["start"])
+) -> tuple[bool, tuple[float, float, int]]:
+    note_events = [
+        (
+            midi_dict.tick_to_ms(note_msg["data"]["start"]) / 1000.0,
+            note_msg["data"]["pitch"],
+        )
         for note_msg in midi_dict.note_msgs
         if note_msg["channel"] != 9
     ]
-    start_times_ms.sort()
+    note_events.sort()
 
-    if not start_times_ms:
-        return False, (0, 0)
+    if not note_events:
+        return False, (0.0, 0.0, 0)
 
-    WINDOW_STEP_S: Final[int] = 1
-    interval_start_s = (
-        midi_dict.tick_to_ms(midi_dict.note_msgs[0]["tick"]) / 1000.0
-    )
-    max_window_note_count_seen = 0
-    max_window_start_s = 0.0
+    WINDOW_STEP_S: Final[float] = 1
+    interval_start_s = note_events[0][0]
+    max_window_note_cnt_seen = 0
+    max_window_start_s: int = 0
+    max_pitch_cnt_seen = 0
     end_idx = 0
-    notes_in_window: Deque[float] = deque()
+    notes_in_window: Deque[tuple[float, int]] = deque()
+    pitch_cnts: dict[int, int] = {}
 
-    while end_idx < len(start_times_ms):
+    while end_idx < len(note_events):
         interval_end_s = interval_start_s + interval_len_s
 
-        for start_ms in start_times_ms[end_idx:]:
-            start_s = start_ms / 1000.0
-            if start_s <= interval_end_s:
-                notes_in_window.append(start_s)
+        for time_s, pitch in note_events[end_idx:]:
+            if time_s <= interval_end_s:
+                notes_in_window.append((time_s, pitch))
+                pitch_cnts[pitch] = pitch_cnts.get(pitch, 0) + 1
                 end_idx += 1
             else:
                 break
 
         if notes_in_window:
-            while notes_in_window and notes_in_window[0] < interval_start_s:
-                notes_in_window.popleft()
+            while notes_in_window and notes_in_window[0][0] < interval_start_s:
+                _, old_pitch = notes_in_window.popleft()
+                pitch_cnts[old_pitch] -= 1
+                if pitch_cnts[old_pitch] == 0:
+                    del pitch_cnts[old_pitch]
 
-        notes_in_window_count = len(notes_in_window)
-        if notes_in_window_count > max_window_note_count_seen:
-            max_window_note_count_seen = notes_in_window_count
-            max_window_start_s = interval_start_s
+        notes_in_window_cnt = len(notes_in_window)
+        max_pitch_cnt = max(pitch_cnts.values()) if pitch_cnts else 0
+
+        if notes_in_window_cnt > max_window_note_cnt_seen:
+            max_window_note_cnt_seen = notes_in_window_cnt
+            max_window_start_s = int(interval_start_s)
+
+        if max_pitch_cnt > max_pitch_cnt_seen:
+            max_pitch_cnt_seen = max_pitch_cnt
 
         interval_start_s += WINDOW_STEP_S
 
     max_allowed_notes = max_notes_per_second * interval_len_s
-    return (
-        max_window_note_count_seen <= max_allowed_notes,
-        (max_window_note_count_seen / interval_len_s, max_window_start_s),
+    max_allowed_pitch_notes = max_notes_per_second_per_pitch * interval_len_s
+
+    is_valid = (
+        max_window_note_cnt_seen <= max_allowed_notes
+        and max_pitch_cnt_seen <= max_allowed_pitch_notes
+    )
+
+    return is_valid, (
+        max_window_note_cnt_seen / interval_len_s,
+        max_pitch_cnt_seen / interval_len_s,
+        max_window_start_s,
     )
 
 
 def test_note_density_in_interval(
     midi_dict: "MidiDict", test_params_list: list[dict]
-) -> tuple[bool, tuple[int, int, float]]:
+) -> tuple[bool, tuple[float, float, float, int]]:
     """Tests if note density exceeds thresholds within sliding time windows.
 
     Args:
         midi_dict: MidiDict to test.
         test_params_list: List of parameter dicts, each containing:
             - max_notes_per_second (int): Maximum allowed notes per second
+            - max_notes_per_second_per_pitch (int): Maximum allowed notes per
+                second for each pitch
             - interval_len_s (float): Length of sliding window in seconds
 
     Returns:
         bool: True if all tests passed, else False
-        tuple[int, int, float]: Result from first failure or final test:
+        tuple[float, float, float, int]: Result from first failure or final test:
             - interval_len_s: Window length in seconds
             - max_notes_per_second: Maximum notes per second seen
+            - max_notes_per_second_per_pitch: Maximum notes per second for each
+                pitch
             - window_start_s: Start time of the window in seconds
     """
 
     for test_params in test_params_list:
-        success, (note_cnt, window_start_s) = _test_note_density_in_interval(
+        success, (
+            notes_per_second,
+            notes_per_second_per_pitch,
+            interval_start_s,
+        ) = _test_note_density_in_interval(
             midi_dict=midi_dict,
             max_notes_per_second=test_params["max_notes_per_second"],
+            max_notes_per_second_per_pitch=test_params[
+                "max_notes_per_second_per_pitch"
+            ],
             interval_len_s=test_params["interval_len_s"],
         )
 
         if success is False:
             return False, (
                 test_params["interval_len_s"],
-                note_cnt,
-                window_start_s,
+                notes_per_second,
+                notes_per_second_per_pitch,
+                interval_start_s,
             )
 
-    return True, (test_params["interval_len_s"], note_cnt, window_start_s)
+    return True, (
+        test_params["interval_len_s"],
+        notes_per_second,
+        notes_per_second_per_pitch,
+        interval_start_s,
+    )
 
 
 # 2.5-3.0 seems like a good pretraining threshold
