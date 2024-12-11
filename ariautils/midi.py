@@ -1140,30 +1140,30 @@ def test_note_frequency_per_instrument(
     return is_valid, note_freq_per_instrument
 
 
-def test_min_length(
-    midi_dict: MidiDict, min_seconds: int
+def test_length(
+    midi_dict: MidiDict,
+    min_length_s: int,
+    max_length_s: int,
 ) -> tuple[bool, float]:
     """Tests the min length is above a threshold.
 
     Args:
         midi_dict (MidiDict): MidiDict to test.
-        min_seconds (int): Minimum length threshold in seconds.
+        min_length_s (int): Minimum length threshold in seconds.
+        max_length_s (int): Maximum length threshold in seconds.
 
     Returns:
-        bool: True if longer than minimum length, else False.
+        bool: True if within thresholds, else False.
         float: Length in seconds.
     """
 
     if not midi_dict.note_msgs:
         return False, 0.0
 
-    total_duration_ms = get_duration_ms(
-        start_tick=midi_dict.note_msgs[0]["data"]["start"],
-        end_tick=midi_dict.note_msgs[-1]["data"]["end"],
-        tempo_msgs=midi_dict.tempo_msgs,
-        ticks_per_beat=midi_dict.ticks_per_beat,
+    total_duration_ms = midi_dict.tick_to_ms(
+        midi_dict.note_msgs[-1]["data"]["end"]
     )
-    is_valid = total_duration_ms / 1e3 >= min_seconds
+    is_valid = min_length_s <= total_duration_ms / 1e3 <= max_length_s
 
     return is_valid, total_duration_ms / 1e3
 
@@ -1749,7 +1749,7 @@ def get_test_fn(
         "max_instruments": test_max_instruments,
         "total_note_frequency": test_note_frequency,
         "note_frequency_per_instrument": test_note_frequency_per_instrument,
-        "min_length": test_min_length,
+        "length": test_length,
         "mean_note_len": test_mean_note_len,
         "mean_note_velocity": test_mean_note_velocity,
         "silent_interval": test_silent_interval,

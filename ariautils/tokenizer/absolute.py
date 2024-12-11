@@ -72,6 +72,7 @@ class AbsTokenizer(Tokenizer):
         self.name = "abs"
 
         # Calculate time quantizations (in ms)
+        # TODO: abs_time_step_ms isn't very descriptive
         self.abs_time_step_ms: int = self.config["abs_time_step_ms"]
         self.max_dur_ms: int = self.config["max_dur_ms"]
         self.time_step_ms: int = self.config["time_step_ms"]
