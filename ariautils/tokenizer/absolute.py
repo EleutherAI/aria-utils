@@ -499,19 +499,25 @@ class AbsTokenizer(Tokenizer):
                 _start_tick: int = curr_tick + tok_2[1]
                 _end_tick: int = _start_tick + self.time_step_ms
 
-                note_msgs.append(
-                    {
-                        "type": "note",
-                        "data": {
-                            "pitch": _pitch,
-                            "start": _start_tick,
-                            "end": _end_tick,
-                            "velocity": _velocity,
-                        },
-                        "tick": _start_tick,
-                        "channel": _channel,
-                    }
-                )
+                if "drum" not in instrument_to_channel.keys():
+                    logger.warning(
+                        f"Tried to decode note message for unexpected instrument: drum"
+                    )
+                else:
+                    _channel = instrument_to_channel["drum"]
+                    note_msgs.append(
+                        {
+                            "type": "note",
+                            "data": {
+                                "pitch": _pitch,
+                                "start": _start_tick,
+                                "end": _end_tick,
+                                "velocity": _velocity,
+                            },
+                            "tick": _start_tick,
+                            "channel": _channel,
+                        }
+                    )
 
             elif (
                 _tok_type_1 in self.instruments_nd

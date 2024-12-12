@@ -1,6 +1,7 @@
 """Utils for MIDI processing."""
 
 import re
+import os
 import json
 import hashlib
 import copy
@@ -23,7 +24,11 @@ from typing import (
     cast,
 )
 
-from ariautils.utils import load_maestro_metadata_json, get_logger
+from ariautils.utils import (
+    load_maestro_metadata_json,
+    load_aria_midi_metadata_json,
+    get_logger,
+)
 
 logger = get_logger(__package__)
 
@@ -995,7 +1000,28 @@ def meta_maestro_json(
     return res
 
 
-# TODO: Add metadata function compatible with aria-midi
+def meta_aria_midi_json(midi_dict: MidiDict) -> dict[str, str]:
+    """Loads metadata from aria-midi metadata.json file."""
+
+    abs_load_path = midi_dict.metadata.get("abs_load_path")
+    if abs_load_path is None:
+        return {}
+
+    metadata_path = Path(abs_load_path).parents[2] / "metadata.json"
+    idx = int(Path(abs_load_path).stem.split("_")[0])
+
+    if os.path.isfile(metadata_path):
+        metadata = load_aria_midi_metadata_json(metadata_path)
+    else:
+        return {}
+
+    res = {}
+    for k, v in metadata[idx]["metadata"].items():
+        res[k] = v
+
+    return res
+
+
 def get_metadata_fn(
     metadata_process_name: str,
 ) -> Callable[Concatenate[MidiDict, ...], dict[str, str]]:
@@ -1007,6 +1033,7 @@ def get_metadata_fn(
         "composer_metamsg": meta_composer_metamsg,
         "form_filename": meta_form_filename,
         "maestro_json": meta_maestro_json,
+        "aria_midi_json": meta_aria_midi_json,
     }
 
     fn = name_to_fn.get(metadata_process_name, None)
