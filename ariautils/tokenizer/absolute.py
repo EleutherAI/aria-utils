@@ -777,9 +777,10 @@ class AbsTokenizer(Tokenizer):
             def _quantize_time(_n: int | float) -> int:
                 return round(_n / time_step) * time_step
 
-            assert (
-                tokenizer_name == "abs"
-            ), f"Augmentation function only supports base AbsTokenizer"
+            assert tokenizer_name in {
+                "abs",
+                "inference_abs",
+            }, f"Augmentation function only supports base AbsTokenizer"
 
             if tempo_aug is None:
                 tempo_aug = random.uniform(
