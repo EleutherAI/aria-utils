@@ -651,6 +651,8 @@ def midi_to_dict(mid: mido.MidiFile) -> MidiDictData:
             time signatures, key signatures, and other musical events.
     """
 
+    mid = copy.deepcopy(mid)
+
     # Convert time in mid to absolute
     for track in mid.tracks:
         curr_tick = 0

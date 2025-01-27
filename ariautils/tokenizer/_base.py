@@ -81,7 +81,7 @@ class Tokenizer:
         MidiDict Object.
 
         Args:
-            tokenized_seq (list[int]): The sequence of tokens to detokenize.
+            tokenized_seq (list[Token]): The sequence of tokens to detokenize.
 
         Returns:
             MidiDict: A MidiDict reconstructed from the tokens.
