@@ -380,6 +380,7 @@ class AbsTokenizer(Tokenizer):
         self,
         midi_dict: MidiDict,
         remove_preceding_silence: bool = True,
+        add_dim_tok: bool = True,
         **kwargs: Any,
     ) -> list[Token]:
         """Tokenizes a MidiDict object into a sequence.
@@ -388,6 +389,8 @@ class AbsTokenizer(Tokenizer):
             midi_dict (MidiDict): The MidiDict to tokenize.
             remove_preceding_silence (bool): If true starts the sequence at
                 onset=0ms by removing preceding silence. Defaults to False.
+            add_dim_tok (bool): Add diminish token if appropriate. Defaults to
+                True.
 
         Returns:
             list[Token]: A sequence of tokens representing the MIDI content.
@@ -396,6 +399,7 @@ class AbsTokenizer(Tokenizer):
         return self._tokenize_midi_dict(
             midi_dict=midi_dict,
             remove_preceding_silence=remove_preceding_silence,
+            add_dim_tok=add_dim_tok,
         )
 
     def _detokenize_midi_dict(self, tokenized_seq: list[Token]) -> MidiDict:
