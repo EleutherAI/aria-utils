@@ -1,4 +1,4 @@
-""""Tests for MidiDict."""
+"""Tests for MidiDict."""
 
 import unittest
 import tempfile
