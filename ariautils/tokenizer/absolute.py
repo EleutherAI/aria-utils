@@ -173,11 +173,14 @@ class AbsTokenizer(Tokenizer):
             return velocity_quantized
 
     def _format(
-        self, prefix: list[Token], unformatted_seq: list[Token]
+        self,
+        prefix: list[Token],
+        unformatted_seq: list[Token],
+        add_dim_tok: bool = True,
     ) -> list[Token]:
         # If unformatted_seq is longer than 150 tokens insert diminish tok
         idx = -100 + random.randint(-10, 10)
-        if len(unformatted_seq) > 150:
+        if len(unformatted_seq) > 150 and add_dim_tok is True:
             if (
                 unformatted_seq[idx][0] == "onset"
             ):  # Don't want: note, <D>, onset, due
@@ -252,7 +255,10 @@ class AbsTokenizer(Tokenizer):
         return tokenized_seq
 
     def _tokenize_midi_dict(
-        self, midi_dict: MidiDict, remove_preceding_silence: bool = True
+        self,
+        midi_dict: MidiDict,
+        remove_preceding_silence: bool = True,
+        add_dim_tok: bool = True,
     ) -> list[Token]:
         ticks_per_beat = midi_dict.ticks_per_beat
         midi_dict.remove_instruments(self.config["ignore_instruments"])
@@ -367,6 +373,7 @@ class AbsTokenizer(Tokenizer):
         return self._format(
             prefix=prefix,
             unformatted_seq=tokenized_seq,
+            add_dim_tok=add_dim_tok,
         )
 
     def tokenize(
