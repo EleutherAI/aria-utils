@@ -210,19 +210,13 @@ class AbsTokenizer(Tokenizer):
                 - Onset of last note if onset=True
         """
 
-        # Find the index of the last onset or dur token
-        seq = copy.deepcopy(seq)
-        for _idx in range(len(seq) - 1, -1, -1):
-            tok = seq[_idx]
-            if type(tok) is tuple and tok[0] in {"onset", "dur"}:
-                break
-            else:
-                seq.pop()
-
-        time_offset_ms = seq.count(self.time_tok) * self.abs_time_step_ms
+        offsets = [0]
+        curr_num_time_toks = seq.count(self.time_tok)
         idx = len(seq) - 1
         for tok in seq[::-1]:
-            if type(tok) is tuple and tok[0] == "dur":
+            if tok == self.time_tok:
+                curr_num_time_toks -= 1
+            elif type(tok) is tuple and tok[0] == "dur":
                 assert seq[idx][0] == "dur", "Expected duration token"
                 assert seq[idx - 1][0] == "onset", "Expect onset token"
 
@@ -231,14 +225,26 @@ class AbsTokenizer(Tokenizer):
                 assert isinstance(onset_ms, int), "Expected int"
                 assert isinstance(duration_ms, int), "Expected int"
 
+                abs_onset_ms = (
+                    curr_num_time_toks * self.abs_time_step_ms
+                ) + onset_ms
+                abs_offset_ms = abs_onset_ms + duration_ms
+
                 if onset is False:
-                    return time_offset_ms + onset_ms + duration_ms
+                    offsets.append(abs_offset_ms)
+
+                    if abs_onset_ms + self.max_dur_ms < max(offsets):
+                        break
+
                 elif onset is True:
-                    return time_offset_ms + onset_ms  # Ignore dur
+                    # Last onset (positionally) is always greatest
+                    return (
+                        curr_num_time_toks * self.abs_time_step_ms
+                    ) + onset_ms
 
             idx -= 1
 
-        raise Exception("Invalid sequence format")
+        return max(offsets)
 
     def truncate_by_time(
         self, tokenized_seq: list[Token], trunc_time_ms: int
