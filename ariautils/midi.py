@@ -8,7 +8,7 @@ import copy
 import unicodedata
 import mido
 
-from mido.midifiles.units import tick2second
+from mido.midifiles.units import tick2second, second2tick
 from collections import defaultdict, deque
 from math import log2
 from pathlib import Path
@@ -318,6 +318,60 @@ class MidiDict:
 
         return self
 
+    def enforce_gaps(
+        self,
+        min_gap_ms: int,
+        min_length_ms: int = 0,
+    ) -> "MidiDict":
+        """Enforce at least min_gap_ms between same-pitch notes on the same
+        MIDI channel, and drop any notes shorter than min_length_ms."""
+
+        def _tempo_at_tick(tick: int) -> int:
+            # find tempo in effect at given tick
+            tempo = self.tempo_msgs[0]["data"]
+            for msg in self.tempo_msgs:
+                if msg["tick"] <= tick:
+                    tempo = msg["data"]
+                else:
+                    break
+            return tempo
+
+        # Phase 1: shorten preceding notes to enforce min_gap_ms
+        note_groups: dict[tuple[int, int], list] = defaultdict(list)
+        for msg in self.note_msgs:
+            key = (msg["channel"], msg["data"]["pitch"])
+            note_groups[key].append(msg)
+
+        for msgs in note_groups.values():
+            msgs.sort(key=lambda m: m["data"]["start"])
+            for prev, curr in zip(msgs, msgs[1:]):
+                prev_end_ms = self.tick_to_ms(prev["data"]["end"])
+                curr_start_ms = self.tick_to_ms(curr["data"]["start"])
+                gap = curr_start_ms - prev_end_ms
+                if gap < min_gap_ms:
+                    # compute new end so that curr_start_ms - new_end_ms == min_gap_ms
+                    new_end_ms = curr_start_ms - min_gap_ms
+                    tempo = _tempo_at_tick(prev["data"]["end"])
+                    new_end_tick = round(
+                        second2tick(
+                            new_end_ms / 1000.0,
+                            ticks_per_beat=self.ticks_per_beat,
+                            tempo=tempo,
+                        )
+                    )
+                    prev["data"]["end"] = new_end_tick
+
+        filtered = []
+        for msg in self.note_msgs:
+            start_ms = self.tick_to_ms(msg["data"]["start"])
+            end_ms = self.tick_to_ms(msg["data"]["end"])
+            if end_ms - start_ms >= min_length_ms:
+                filtered.append(msg)
+
+        self.note_msgs = sorted(filtered, key=lambda m: m["data"]["start"])
+
+        return self
+
     def resolve_pedal(self) -> "MidiDict":
         """Extend note offsets according to pedal and resolve any note overlaps"""
 
@@ -460,7 +514,10 @@ class MidiDict:
 
                 if pedal_is_useful is False:
                     # Pedal hasn't effected any notes -> remove
-                    pedal_msg_idxs_to_remove.append(pedal_down_msg_idx)
+                    assert pedal_down_msg_idx is not None
+                    pedal_msg_idxs_to_remove.append(
+                        pedal_down_msg_idx
+                    )  # line 517
                     pedal_msg_idxs_to_remove.append(pedal_msg_idx)
 
                 # Finished processing pedal, set pedal state to OFF
