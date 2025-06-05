@@ -177,6 +177,7 @@ class AbsTokenizer(Tokenizer):
         prefix: list[Token],
         unformatted_seq: list[Token],
         add_dim_tok: bool = True,
+        add_eos_tok: bool = True,
     ) -> list[Token]:
         # If unformatted_seq is longer than 150 tokens insert diminish tok
         idx = -100 + random.randint(-10, 10)
@@ -192,7 +193,10 @@ class AbsTokenizer(Tokenizer):
             else:
                 unformatted_seq.insert(idx, self.dim_tok)
 
-        res = prefix + [self.bos_tok] + unformatted_seq + [self.eos_tok]
+        if add_eos_tok is True:
+            res = prefix + [self.bos_tok] + unformatted_seq + [self.eos_tok]
+        else:
+            res = prefix + [self.bos_tok] + unformatted_seq
 
         return res
 
@@ -265,6 +269,7 @@ class AbsTokenizer(Tokenizer):
         midi_dict: MidiDict,
         remove_preceding_silence: bool = True,
         add_dim_tok: bool = True,
+        add_eos_tok: bool = True,
     ) -> list[Token]:
         ticks_per_beat = midi_dict.ticks_per_beat
         midi_dict.remove_instruments(self.config["ignore_instruments"])
@@ -380,6 +385,7 @@ class AbsTokenizer(Tokenizer):
             prefix=prefix,
             unformatted_seq=tokenized_seq,
             add_dim_tok=add_dim_tok,
+            add_eos_tok=add_eos_tok,
         )
 
     def tokenize(
@@ -387,6 +393,7 @@ class AbsTokenizer(Tokenizer):
         midi_dict: MidiDict,
         remove_preceding_silence: bool = True,
         add_dim_tok: bool = True,
+        add_eos_tok: bool = True,
         **kwargs: Any,
     ) -> list[Token]:
         """Tokenizes a MidiDict object into a sequence.
@@ -394,9 +401,10 @@ class AbsTokenizer(Tokenizer):
         Args:
             midi_dict (MidiDict): The MidiDict to tokenize.
             remove_preceding_silence (bool): If true starts the sequence at
-                onset=0ms by removing preceding silence. Defaults to False.
+                onset=0ms by removing preceding silence. Defaults to True.
             add_dim_tok (bool): Add diminish token if appropriate. Defaults to
                 True.
+            add_dim_tok (bool): Append end of sequence token. Defaults to True.
 
         Returns:
             list[Token]: A sequence of tokens representing the MIDI content.
@@ -406,6 +414,7 @@ class AbsTokenizer(Tokenizer):
             midi_dict=midi_dict,
             remove_preceding_silence=remove_preceding_silence,
             add_dim_tok=add_dim_tok,
+            add_eos_tok=add_eos_tok,
         )
 
     def _detokenize_midi_dict(self, tokenized_seq: list[Token]) -> MidiDict:
