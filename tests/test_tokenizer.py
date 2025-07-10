@@ -111,6 +111,16 @@ class TestAbsTokenizer(unittest.TestCase):
         load_path = TEST_DATA_DIRECTORY.joinpath("basic.mid")
         _test_tokenize_detokenize(_load_path=load_path)
 
+    def test_tokenize_detokenize_pedal(self) -> None:
+        load_path = TEST_DATA_DIRECTORY.joinpath("transcription.mid")
+        save_path = RESULTS_DATA_DIRECTORY.joinpath("transcription_pedal.mid")
+
+        midi_dict = MidiDict.from_midi(load_path)
+        tokenizer = AbsTokenizer()
+
+        seq = tokenizer.tokenize(midi_dict=midi_dict)
+        tokenizer.detokenize(tokenized_seq=seq).to_midi().save(save_path)
+
     def test_pitch_aug(self) -> None:
         def _test_out_of_bounds(
             tokenizer: AbsTokenizer,
