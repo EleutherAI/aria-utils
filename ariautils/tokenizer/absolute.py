@@ -308,7 +308,9 @@ class AbsTokenizer(Tokenizer):
                     "does not officially support multiple channels. You must "
                     "manually ensure that channels don't overlap.",
                 )
-            assert set(channel_to_instrument.values()) == {"piano"}
+            assert set(channel_to_instrument.values()) == {
+                "piano"
+            }, "AbsTokenizer config setting include_pedal=True only supports piano"
 
         # Calculate prefix
         prefix: list[Token] = [
