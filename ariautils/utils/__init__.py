@@ -34,6 +34,12 @@ def get_logger(name: str | None) -> logging.Logger:
 
 
 @lru_cache(maxsize=1)
+def warn_once(logger_name: str, message: str):
+    logger = logging.getLogger(logger_name)
+    logger.warning(message)
+
+
+@lru_cache(maxsize=1)
 def load_maestro_metadata_json() -> dict[str, Any]:
     """Loads MAESTRO metadata json ."""
     with (

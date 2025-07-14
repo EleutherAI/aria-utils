@@ -3,7 +3,6 @@
 import functools
 import itertools
 import random
-import copy
 
 from pathlib import Path
 from collections import defaultdict
@@ -18,7 +17,7 @@ from ariautils.midi import (
     NoteMessage,
     get_duration_ms,
 )
-from ariautils.utils import load_config, get_logger
+from ariautils.utils import load_config, get_logger, warn_once
 from ariautils.tokenizer._base import Tokenizer, Token
 
 
@@ -302,7 +301,13 @@ class AbsTokenizer(Tokenizer):
                 channel_to_instrument[c] = "piano"
 
         if self.include_pedal:
-            assert len(channel_to_instrument.values()) == 1
+            if len(channel_to_instrument.keys()) > 1:
+                warn_once(
+                    logger_name=logger.name,
+                    message=f"AbsTokenizer config setting include_pedal=True "
+                    "does not officially support multiple channels. You must "
+                    "manually ensure that channels don't overlap.",
+                )
             assert set(channel_to_instrument.values()) == {"piano"}
 
         # Calculate prefix
