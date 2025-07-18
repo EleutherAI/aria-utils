@@ -322,32 +322,19 @@ class MidiDict:
     def enforce_gaps(
         self,
         min_gap_ms: int = 0,
-        min_gap_by_vel: dict[int, int] | None = None,
         min_length_ms: int = 0,
     ) -> "MidiDict":
         """Enforce a minimum gap between consecutive same-pitch notes.
 
         Shortens the end time of a note if it's too close to the next note
-        of the same pitch and channel. The required gap can be a single value or
-        vary based on the velocity of the following note.
-
-        After gaps are enforced, any note shorter than `min_length_ms` is removed.
+        of the same pitch and channel. After gaps are enforced, any note shorter
+        than `min_length_ms` is removed.
 
         Args:
-            min_gap_ms (int): The default minimum gap in milliseconds. This
-                value is used as a fallback if `min_gap_by_vel` is provided but
-                a specific velocity is not found in the map.
-            min_gap_by_vel (dict[int, int]): An optional dictionary mapping a
-                MIDI velocity (int) to a desired minimum preceding gap (ms).
+            min_gap_ms (int): The default minimum gap in milliseconds.
             min_length_ms (int): The minimum duration for a note in milliseconds.
                 Notes shorter than this will be removed after processing.
         """
-
-        def _get_min_gap_ms(vel: int) -> int:
-            if min_gap_by_vel is not None:
-                return min_gap_by_vel[vel]
-            else:
-                return min_gap_ms
 
         def _tempo_at_tick(tick: int) -> int:
             # find tempo in effect at given tick
@@ -370,10 +357,9 @@ class MidiDict:
                 prev_end_ms = self.tick_to_ms(prev["data"]["end"])
                 curr_start_ms = self.tick_to_ms(curr["data"]["start"])
                 curr_gap_ms = curr_start_ms - prev_end_ms
-                curr_min_gap_ms = _get_min_gap_ms(curr["data"]["velocity"])
-                if curr_gap_ms < curr_min_gap_ms:
-                    # Compute new end so that curr_start_ms - new_end_ms == curr_min_gap_ms
-                    new_end_ms = curr_start_ms - curr_min_gap_ms
+                if curr_gap_ms < min_gap_ms:
+                    # Compute new end so that curr_start_ms - new_end_ms == min_gap_ms
+                    new_end_ms = curr_start_ms - min_gap_ms
                     tempo = _tempo_at_tick(prev["data"]["end"])
                     new_end_tick = round(
                         second2tick(

@@ -63,6 +63,9 @@ class TestAbsTokenizer(unittest.TestCase):
         load_path = TEST_DATA_DIRECTORY.joinpath("arabesque.mid")
         save_path = RESULTS_DATA_DIRECTORY.joinpath("arabesque_norm.mid")
         _test_normalize_midi_dict(load_path, save_path)
+        load_path = TEST_DATA_DIRECTORY.joinpath("transcription.mid")
+        save_path = RESULTS_DATA_DIRECTORY.joinpath("transcription_norm.mid")
+        _test_normalize_midi_dict(load_path, save_path)
         load_path = TEST_DATA_DIRECTORY.joinpath("pop.mid")
         save_path = RESULTS_DATA_DIRECTORY.joinpath("pop_norm.mid")
         _test_normalize_midi_dict(load_path, save_path)
@@ -106,6 +109,8 @@ class TestAbsTokenizer(unittest.TestCase):
 
         load_path = TEST_DATA_DIRECTORY.joinpath("arabesque.mid")
         _test_tokenize_detokenize(_load_path=load_path)
+        load_path = TEST_DATA_DIRECTORY.joinpath("transcription.mid")
+        _test_tokenize_detokenize(_load_path=load_path)
         load_path = TEST_DATA_DIRECTORY.joinpath("pop.mid")
         _test_tokenize_detokenize(_load_path=load_path)
         load_path = TEST_DATA_DIRECTORY.joinpath("basic.mid")
@@ -119,6 +124,16 @@ class TestAbsTokenizer(unittest.TestCase):
         tokenizer = AbsTokenizer()
 
         seq = tokenizer.tokenize(midi_dict=midi_dict)
+        tokenizer.detokenize(tokenized_seq=seq).to_midi().save(save_path)
+
+        save_path = RESULTS_DATA_DIRECTORY.joinpath(
+            "transcription_pedal_aug.mid"
+        )
+        data_aug = tokenizer.export_data_aug()
+
+        for f in data_aug:
+            seq = f(seq)
+
         tokenizer.detokenize(tokenized_seq=seq).to_midi().save(save_path)
 
     def test_pitch_aug(self) -> None:
@@ -204,6 +219,12 @@ class TestAbsTokenizer(unittest.TestCase):
             _test_pitch_aug(tokenizer, midi_dict, pitch_aug)
             _test_out_of_bounds(tokenizer, midi_dict, pitch_aug)
 
+        load_path = TEST_DATA_DIRECTORY.joinpath("transcription.mid")
+        midi_dict = MidiDict.from_midi(load_path)
+        for pitch_aug in range(-30, 30):
+            _test_pitch_aug(tokenizer, midi_dict, pitch_aug)
+            _test_out_of_bounds(tokenizer, midi_dict, pitch_aug)
+
         load_path = TEST_DATA_DIRECTORY.joinpath("pop.mid")
         midi_dict = MidiDict.from_midi(load_path)
         for pitch_aug in range(-30, 30):
@@ -274,6 +295,11 @@ class TestAbsTokenizer(unittest.TestCase):
 
         tokenizer = AbsTokenizer()
         load_path = TEST_DATA_DIRECTORY.joinpath("arabesque.mid")
+        midi_dict = MidiDict.from_midi(load_path)
+        for velocity_aug in range(-10, 10):
+            _test_velocity_aug(tokenizer, midi_dict, velocity_aug)
+
+        load_path = TEST_DATA_DIRECTORY.joinpath("transcription.mid")
         midi_dict = MidiDict.from_midi(load_path)
         for velocity_aug in range(-10, 10):
             _test_velocity_aug(tokenizer, midi_dict, velocity_aug)
@@ -366,6 +392,11 @@ class TestAbsTokenizer(unittest.TestCase):
         for tempo_aug in tempo_range:
             _test_tempo_aug(tokenizer, midi_dict, tempo_aug)
 
+        load_path = TEST_DATA_DIRECTORY.joinpath("transcription.mid")
+        midi_dict = MidiDict.from_midi(load_path)
+        for tempo_aug in tempo_range:
+            _test_tempo_aug(tokenizer, midi_dict, tempo_aug)
+
         load_path = TEST_DATA_DIRECTORY.joinpath("pop.mid")
         midi_dict = MidiDict.from_midi(load_path)
         for tempo_aug in tempo_range:
@@ -421,6 +452,9 @@ class TestRelTokenizer(unittest.TestCase):
         load_path = TEST_DATA_DIRECTORY.joinpath("arabesque.mid")
         save_path = RESULTS_DATA_DIRECTORY.joinpath("arabesque_norm.mid")
         _test_normalize_midi_dict(load_path, save_path)
+        load_path = TEST_DATA_DIRECTORY.joinpath("transcription.mid")
+        save_path = RESULTS_DATA_DIRECTORY.joinpath("transcription_norm.mid")
+        _test_normalize_midi_dict(load_path, save_path)
         load_path = TEST_DATA_DIRECTORY.joinpath("pop.mid")
         save_path = RESULTS_DATA_DIRECTORY.joinpath("pop_norm.mid")
         _test_normalize_midi_dict(load_path, save_path)
@@ -463,6 +497,8 @@ class TestRelTokenizer(unittest.TestCase):
             )
 
         load_path = TEST_DATA_DIRECTORY.joinpath("arabesque.mid")
+        _test_tokenize_detokenize(_load_path=load_path)
+        load_path = TEST_DATA_DIRECTORY.joinpath("transcription.mid")
         _test_tokenize_detokenize(_load_path=load_path)
         load_path = TEST_DATA_DIRECTORY.joinpath("pop.mid")
         _test_tokenize_detokenize(_load_path=load_path)
@@ -552,6 +588,12 @@ class TestRelTokenizer(unittest.TestCase):
             _test_pitch_aug(tokenizer, midi_dict, pitch_aug)
             _test_out_of_bounds(tokenizer, midi_dict, pitch_aug)
 
+        load_path = TEST_DATA_DIRECTORY.joinpath("transcription.mid")
+        midi_dict = MidiDict.from_midi(load_path)
+        for pitch_aug in range(-30, 30):
+            _test_pitch_aug(tokenizer, midi_dict, pitch_aug)
+            _test_out_of_bounds(tokenizer, midi_dict, pitch_aug)
+
         load_path = TEST_DATA_DIRECTORY.joinpath("pop.mid")
         midi_dict = MidiDict.from_midi(load_path)
         for pitch_aug in range(-30, 30):
@@ -622,6 +664,11 @@ class TestRelTokenizer(unittest.TestCase):
 
         tokenizer = RelTokenizer()
         load_path = TEST_DATA_DIRECTORY.joinpath("arabesque.mid")
+        midi_dict = MidiDict.from_midi(load_path)
+        for velocity_aug in range(-10, 10):
+            _test_velocity_aug(tokenizer, midi_dict, velocity_aug)
+
+        load_path = TEST_DATA_DIRECTORY.joinpath("transcription.mid")
         midi_dict = MidiDict.from_midi(load_path)
         for velocity_aug in range(-10, 10):
             _test_velocity_aug(tokenizer, midi_dict, velocity_aug)

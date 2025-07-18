@@ -151,9 +151,6 @@ class AbsTokenizer(Tokenizer):
             self.add_tokens_to_vocab([self.ped_on_tok, self.ped_off_tok])
 
     def export_data_aug(self) -> list[Callable[[list[Token]], list[Token]]]:
-        assert (
-            self.include_pedal is False
-        ), f"Data augmentation doesn't support pedal"
         return [
             self.export_tempo_aug(max_tempo_aug=0.2, mixup=True),
             self.export_pitch_aug(5),
@@ -836,7 +833,6 @@ class AbsTokenizer(Tokenizer):
             )
         )
 
-    # TODO: Refactor this logic
     def export_tempo_aug(
         self, max_tempo_aug: float, mixup: bool
     ) -> Callable[Concatenate[list[Token], ...], list[Token]]:
@@ -845,9 +841,8 @@ class AbsTokenizer(Tokenizer):
         Additionally this function performs note-mixup: randomly re-ordering
         the note subsequences which occur on the same onset.
 
-        IMPORTANT: This function doesn't support additional tokens. If you
-        have modified the tokenizer in any way, this should not be added to
-        export_data_aug.
+        This version supports variable-length token events, including notes,
+        drums, and pedal events.
 
         Args:
             max_tempo_aug (float): Returned function will randomly augment
@@ -863,13 +858,15 @@ class AbsTokenizer(Tokenizer):
             abs_time_step: int,
             max_dur: int,
             time_step: int,
-            unk_tok: str,
+            bos_tok: str,
+            eos_tok: str,
             time_tok: str,
             dim_tok: str,
-            start_tok: str,
-            end_tok: str,
-            instruments_wd: list,
-            tokenizer_name: str,
+            pad_tok: str,
+            unk_tok: str,
+            ped_on_tok: str,
+            ped_off_tok: str,
+            instruments_wd: list[str],
             _max_tempo_aug: float,
             _mixup: bool,
             tempo_aug: float | None = None,
@@ -880,116 +877,181 @@ class AbsTokenizer(Tokenizer):
             def _quantize_time(_n: int | float) -> int:
                 return round(_n / time_step) * time_step
 
-            assert tokenizer_name in {
-                "abs",
-                "inference_abs",
-            }, f"Augmentation function only supports base AbsTokenizer"
-
             if tempo_aug is None:
                 tempo_aug = random.uniform(
                     1 - _max_tempo_aug, 1 + _max_tempo_aug
                 )
 
-            src_time_tok_cnt = 0
-            dim_tok_seen = None
-            res: list[Token] = []
-            note_buffer: dict[str, Token | None] | None = None
-
-            # Buffer tracks
-            buffer: dict[int, dict[int, list[dict[str, Token | None]]]] = (
+            # Buffer to hold all events, grouped by time
+            # buffer[time_tok_count][onset_ms] = [ event_1, event_2, ... ]
+            # where event is a list of tokens, e.g. [note, onset, dur]
+            buffer: defaultdict[int, defaultdict[int, list[list[Token]]]] = (
                 defaultdict(lambda: defaultdict(list))
             )
-            for tok_1, tok_2, tok_3 in zip(src, src[1:], src[2:]):
-                if tok_1 == time_tok:
-                    _tok_type = "time"
-                elif tok_1 == unk_tok:
-                    _tok_type = "unk"
-                elif tok_1 == start_tok:
-                    res.append(tok_1)
-                    continue
-                elif tok_1 == dim_tok and note_buffer is not None:
-                    assert isinstance(note_buffer["onset"], tuple)
-                    dim_tok_seen = (src_time_tok_cnt, note_buffer["onset"][1])
-                    continue
-                elif tok_1[0] == "prefix":
-                    res.append(tok_1)
-                    continue
-                elif tok_1[0] in instruments_wd:
-                    _tok_type = tok_1[0]
+
+            res_prefix: list[Token] = []
+            src_time_tok_cnt = 0
+            dim_tok_seen_at: tuple[int, int] | None = None
+            eos_tok_seen: bool = False
+
+            idx = 0
+            while idx < len(src):
+                tok = src[idx]
+                is_tuple = isinstance(tok, tuple)
+                if tok is bos_tok or (is_tuple and tok[0] == "prefix"):
+                    res_prefix.append(tok)
+                    idx += 1
                 else:
-                    # This only triggers for incomplete notes at the beginning,
-                    # e.g. an onset token before a note token is seen
+                    break
+
+            while idx < len(src):
+                event_subsequence = []
+                tok = src[idx]
+
+                if tok == time_tok:
+                    src_time_tok_cnt += 1
+                    idx += 1
                     continue
 
-                if _tok_type == "time":
-                    src_time_tok_cnt += 1
-                elif _tok_type == "drum":
-                    assert isinstance(tok_2[1], int)
-                    note_buffer = {
-                        "note": tok_1,
-                        "onset": tok_2,
-                        "dur": None,
-                    }
-                    buffer[src_time_tok_cnt][tok_2[1]].append(note_buffer)
-                else:  # unk or in instruments_wd
-                    assert isinstance(tok_2[1], int)
-                    note_buffer = {
-                        "note": tok_1,
-                        "onset": tok_2,
-                        "dur": tok_3,
-                    }
-                    buffer[src_time_tok_cnt][tok_2[1]].append(note_buffer)
+                if tok is eos_tok:
+                    eos_tok_seen = True
+                    idx += 1
+                    continue
+                elif tok in {unk_tok, pad_tok}:
+                    idx += 1
+                    continue
 
+                # Handle <D> token by attaching it to the previous event's time
+                if tok == dim_tok:
+                    if dim_tok_seen_at is not None:
+                        logger.warning(
+                            "Multiple <D> tokens encountered in augmentation"
+                        )
+                    # Find the last buffered event to get its time
+                    last_time = max(buffer.keys()) if buffer else 0
+                    last_onset = (
+                        max(buffer[last_time].keys())
+                        if buffer.get(last_time)
+                        else 0
+                    )
+                    dim_tok_seen_at = (last_time, last_onset)
+                    idx += 1
+                    continue
+
+                # Parse event sequences (note, drum, pedal)
+                tok_type = tok[0] if isinstance(tok, tuple) else tok
+                current_onset = -1
+
+                if (
+                    tok_type in instruments_wd and tok_type != "drum"
+                ):  # Note Event: 3 tokens
+                    event_subsequence = src[idx : idx + 3]
+                    idx += 3
+                    if (
+                        len(event_subsequence) < 3
+                        or event_subsequence[1][0] != "onset"
+                        or event_subsequence[2][0] != "dur"
+                    ):
+                        logger.warning(
+                            f"Malformed sequence: {event_subsequence}"
+                        )
+                        continue
+                    current_onset = event_subsequence[1][1]
+                elif tok_type == "drum":  # Drum Event: 2 tokens
+                    event_subsequence = src[idx : idx + 2]
+                    idx += 2
+                    if (
+                        len(event_subsequence) < 2
+                        or event_subsequence[1][0] != "onset"
+                    ):
+                        logger.warning(
+                            f"Malformed sequence: {event_subsequence}"
+                        )
+                        continue
+                    current_onset = event_subsequence[1][1]
+                elif tok_type in {
+                    ped_on_tok,
+                    ped_off_tok,
+                }:  # Pedal Event: 2 tokens
+                    event_subsequence = src[idx : idx + 2]
+                    idx += 2
+                    if (
+                        len(event_subsequence) < 2
+                        or event_subsequence[1][0] != "onset"
+                    ):
+                        logger.warning(
+                            f"Malformed sequence: {event_subsequence}"
+                        )
+                        continue
+                    current_onset = event_subsequence[1][1]
+                else:
+                    idx += 1
+                    continue
+
+                if current_onset != -1:
+                    buffer[src_time_tok_cnt][current_onset].append(
+                        event_subsequence
+                    )
+
+            res_events: list[Token] = []
             prev_tgt_time_tok_cnt = 0
-            for src_time_tok_cnt, interval_notes in sorted(buffer.items()):
-                for src_onset, notes_by_onset in sorted(interval_notes.items()):
+
+            for src_time_tok_cnt, interval_events in sorted(buffer.items()):
+                for src_onset, events_at_onset in sorted(
+                    interval_events.items()
+                ):
                     src_time = src_time_tok_cnt * abs_time_step + src_onset
                     tgt_time = _quantize_time(src_time * tempo_aug)
+
                     curr_tgt_time_tok_cnt = tgt_time // abs_time_step
                     curr_tgt_onset = tgt_time % abs_time_step
 
-                    if curr_tgt_onset == abs_time_step:
-                        curr_tgt_onset -= time_step
-
+                    # Add necessary <T> tokens
                     for _ in range(
                         curr_tgt_time_tok_cnt - prev_tgt_time_tok_cnt
                     ):
-                        res.append(time_tok)
+                        res_events.append(time_tok)
                     prev_tgt_time_tok_cnt = curr_tgt_time_tok_cnt
 
-                    if _mixup == True:
-                        random.shuffle(notes_by_onset)
+                    if _mixup:
+                        random.shuffle(events_at_onset)
 
-                    for note in notes_by_onset:
-                        _src_note_tok = note["note"]
-                        _src_dur_tok = note["dur"]
-                        assert _src_note_tok is not None
-
-                        if _src_dur_tok is not None:
-                            assert isinstance(_src_dur_tok[1], int)
+                    # Process and append all events for this timestamp
+                    for event in events_at_onset:
+                        first_tok = event[0]
+                        # Note event with duration
+                        if len(event) == 3:
+                            _src_dur_tok = event[2]
                             tgt_dur = _quantize_time(
                                 _src_dur_tok[1] * tempo_aug
                             )
-                            tgt_dur = min(tgt_dur, max_dur)
-                        else:
-                            tgt_dur = None
+                            tgt_dur = max(
+                                min(tgt_dur, max_dur),
+                                time_step,
+                            )
+                            res_events.extend(
+                                [
+                                    first_tok,
+                                    ("onset", curr_tgt_onset),
+                                    ("dur", tgt_dur),
+                                ]
+                            )
+                        elif len(event) == 2:
+                            res_events.extend(
+                                [first_tok, ("onset", curr_tgt_onset)]
+                            )
 
-                        res.append(_src_note_tok)
-                        res.append(("onset", curr_tgt_onset))
-                        if tgt_dur:
-                            res.append(("dur", tgt_dur))
+                    if dim_tok_seen_at == (src_time_tok_cnt, src_onset):
+                        res_events.append(dim_tok)
+                        dim_tok_seen_at = None
 
-                        if dim_tok_seen is not None and dim_tok_seen == (
-                            src_time_tok_cnt,
-                            src_onset,
-                        ):
-                            res.append(dim_tok)
-                            dim_tok_seen = None
+            # Re-assemble the final sequence
+            final_res = res_prefix + res_events
 
-            if src[-1] == end_tok:
-                res.append(end_tok)
+            if eos_tok_seen is True:
+                final_res.append(eos_tok)
 
-            return res
+            return final_res
 
         return self.export_aug_fn_concat(
             functools.partial(
@@ -997,13 +1059,15 @@ class AbsTokenizer(Tokenizer):
                 abs_time_step=self.abs_time_step_ms,
                 max_dur=self.max_dur_ms,
                 time_step=self.time_step_ms,
-                unk_tok=self.unk_tok,
+                bos_tok=self.bos_tok,
+                eos_tok=self.eos_tok,
                 time_tok=self.time_tok,
                 dim_tok=self.dim_tok,
-                end_tok=self.eos_tok,
-                start_tok=self.bos_tok,
+                pad_tok=self.pad_tok,
+                unk_tok=self.unk_tok,
+                ped_on_tok=self.ped_on_tok,
+                ped_off_tok=self.ped_off_tok,
                 instruments_wd=self.instruments_wd,
-                tokenizer_name=self.name,
                 _max_tempo_aug=max_tempo_aug,
                 _mixup=mixup,
             )
