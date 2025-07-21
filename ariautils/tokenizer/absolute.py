@@ -329,22 +329,21 @@ class AbsTokenizer(Tokenizer):
 
         tokenized_seq: list[Token] = []
 
+        if self.include_pedal is True:
+            _msgs = midi_dict.note_msgs + midi_dict.pedal_msgs
+        else:
+            _msgs = midi_dict.note_msgs
+
+        _msgs.sort(
+            key=lambda msg: (
+                msg["data"]["start"] if msg["type"] == "note" else msg["tick"]
+            )
+        )
+
         if remove_preceding_silence is False:
             initial_onset_tick = 0
         else:
-            initial_onset_tick = midi_dict.note_msgs[0]["data"]["start"]
-
-        if self.include_pedal is True:
-            _msgs = midi_dict.note_msgs + midi_dict.pedal_msgs
-            _msgs.sort(
-                key=lambda msg: (
-                    msg["data"]["start"]
-                    if msg["type"] == "note"
-                    else msg["tick"]
-                )
-            )
-        else:
-            _msgs = midi_dict.note_msgs
+            initial_onset_tick = _msgs[0]["tick"]
 
         curr_time_since_onset = 0
         for _, msg in enumerate(_msgs):
