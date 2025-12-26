@@ -5,7 +5,9 @@ import itertools
 import random
 
 from pathlib import Path
-from typing import Final, Callable, Any, Concatenate
+from typing import Final, Callable, Any, Concatenate, ParamSpec
+
+P = ParamSpec("P")
 
 from ariautils.midi import (
     MidiDict,
@@ -501,7 +503,7 @@ class RelTokenizer(Tokenizer):
 
     def export_pitch_aug(
         self, max_pitch_aug: int
-    ) -> Callable[Concatenate[list[Token], ...], list[Token]]:
+    ) -> Callable[Concatenate[list[Token], P], list[Token]]:
         """Exports a function that augments the pitch of all note tokens.
 
         Note that notes which fall out of the range (0, 127) will be replaced
@@ -560,7 +562,7 @@ class RelTokenizer(Tokenizer):
 
     def export_velocity_aug(
         self, max_num_aug_steps: int
-    ) -> Callable[Concatenate[list[Token], ...], list[Token]]:
+    ) -> Callable[Concatenate[list[Token], P], list[Token]]:
         """Exports a function which augments the velocity of all pitch tokens.
 
         Velocity values are clipped so that they don't fall outside of the
@@ -634,7 +636,7 @@ class RelTokenizer(Tokenizer):
     # TODO: Needs unit test
     def export_tempo_aug(
         self, max_tempo_aug: float
-    ) -> Callable[Concatenate[list[Token], ...], list[Token]]:
+    ) -> Callable[Concatenate[list[Token], P], list[Token]]:
         """Exports a function which augments the tempo of a sequence of tokens.
 
         Args:
@@ -720,7 +722,7 @@ class RelTokenizer(Tokenizer):
 
     def export_chord_mixup(
         self,
-    ) -> Callable[Concatenate[list[Token], ...], list[Token]]:
+    ) -> Callable[Concatenate[list[Token], P], list[Token]]:
         """Exports a function which augments order of concurrent note tokens.
 
         Concurrent note tokens are those which are not separated by a wait

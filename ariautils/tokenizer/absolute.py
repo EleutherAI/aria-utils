@@ -6,7 +6,9 @@ import random
 
 from pathlib import Path
 from collections import defaultdict
-from typing import Final, Callable, Any, Concatenate
+from typing import Final, Callable, Any, Concatenate, ParamSpec
+
+P = ParamSpec("P")
 
 from ariautils.midi import (
     MidiDict,
@@ -725,7 +727,7 @@ class AbsTokenizer(Tokenizer):
 
     def export_pitch_aug(
         self, max_pitch_aug: int
-    ) -> Callable[Concatenate[list[Token], ...], list[Token]]:
+    ) -> Callable[Concatenate[list[Token], P], list[Token]]:
         """Exports a function that augments the pitch of all note tokens.
 
         Notes which fall out of the range (0, 127) will be replaced
@@ -794,7 +796,7 @@ class AbsTokenizer(Tokenizer):
 
     def export_velocity_aug(
         self, max_num_aug_steps: int
-    ) -> Callable[Concatenate[list[Token], ...], list[Token]]:
+    ) -> Callable[Concatenate[list[Token], P], list[Token]]:
         """Exports a function which augments the velocity of all pitch tokens.
 
         Velocity values are clipped so that they don't fall outside of the
@@ -866,7 +868,7 @@ class AbsTokenizer(Tokenizer):
 
     def export_tempo_aug(
         self, max_tempo_aug: float, mixup: bool
-    ) -> Callable[Concatenate[list[Token], ...], list[Token]]:
+    ) -> Callable[Concatenate[list[Token], P], list[Token]]:
         """Exports a function which augments the tempo of a sequence of tokens.
 
         Additionally this function performs note-mixup: randomly re-ordering
@@ -916,7 +918,7 @@ class AbsTokenizer(Tokenizer):
                 )
 
             # Buffer to hold all events, grouped by time
-            # buffer[time_tok_count][onset_ms] = [ event_1, event_2, ... ]
+            # buffer[time_tok_count][onset_ms] = [ event_1, event_2, P ]
             # where event is a list of tokens, e.g. [note, onset, dur]
             buffer: defaultdict[int, defaultdict[int, list[list[Token]]]] = (
                 defaultdict(lambda: defaultdict(list))

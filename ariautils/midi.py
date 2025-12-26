@@ -22,7 +22,10 @@ from typing import (
     Literal,
     TypedDict,
     cast,
+    ParamSpec
 )
+
+P = ParamSpec("P")
 
 from ariautils.utils import (
     load_maestro_metadata_json,
@@ -1092,10 +1095,10 @@ def meta_aria_midi_json(midi_dict: MidiDict) -> dict[str, str]:
 
 def get_metadata_fn(
     metadata_process_name: str,
-) -> Callable[Concatenate[MidiDict, ...], dict[str, str]]:
+) -> Callable[Concatenate[MidiDict, P], dict[str, str]]:
     name_to_fn: dict[
         str,
-        Callable[Concatenate[MidiDict, ...], dict[str, str]],
+        Callable[Concatenate[MidiDict, P], dict[str, str]],
     ] = {
         "composer_filename": meta_composer_filename,
         "composer_metamsg": meta_composer_metamsg,
@@ -1836,9 +1839,9 @@ def test_repetitive_content(
 # TODO: Refactor tests into a new module
 def get_test_fn(
     test_name: str,
-) -> Callable[Concatenate[MidiDict, ...], tuple[bool, Any]]:
+) -> Callable[Concatenate[MidiDict, P], tuple[bool, Any]]:
     name_to_fn: dict[
-        str, Callable[Concatenate[MidiDict, ...], tuple[bool, Any]]
+        str, Callable[Concatenate[MidiDict, P], tuple[bool, Any]]
     ] = {
         "max_programs": test_max_programs,
         "max_instruments": test_max_instruments,
