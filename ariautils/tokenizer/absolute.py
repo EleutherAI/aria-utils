@@ -99,7 +99,12 @@ class AbsTokenizer(Tokenizer):
             for k, v in self.config["ignore_instruments"].items()
             if v is False
         ]
-        self.instruments_wd = self.instruments_nd + ["drum"]
+
+        self.include_drums: bool = self.config.get("include_drums", True)
+        if self.include_drums:
+            self.instruments_wd = self.instruments_nd + ["drum"]
+        else:
+            self.instruments_wd = self.instruments_nd
 
         # Prefix tokens
         self.prefix_tokens: list[Token] = [
@@ -122,7 +127,11 @@ class AbsTokenizer(Tokenizer):
         self.dur_tokens: list[Token] = [
             ("dur", i) for i in self.dur_time_quantizations
         ]
-        self.drum_tokens: list[Token] = [("drum", i) for i in range(35, 82)]
+
+        if self.include_drums:
+            self.drum_tokens: list[Token] = [("drum", i) for i in range(35, 82)]
+        else:
+            self.drum_tokens: list[Token] = []
 
         self.note_tokens: list[Token] = list(
             itertools.product(
@@ -305,16 +314,16 @@ class AbsTokenizer(Tokenizer):
                     "does not officially support multiple channels. You must "
                     "manually ensure that channels don't overlap.",
                 )
-            assert set(channel_to_instrument.values()) == {
-                "piano"
-            }, "AbsTokenizer config setting include_pedal=True only supports piano"
+            assert set(channel_to_instrument.values()) == {"piano"}, (
+                "AbsTokenizer config setting include_pedal=True only supports piano"
+            )
 
         # Calculate prefix
         prefix: list[Token] = [
             ("prefix", "instrument", x)
             for x in set(channel_to_instrument.values())
         ]
-        if 9 in channels_used:
+        if 9 in channels_used and self.include_drums:
             prefix.append(("prefix", "instrument", "drum"))
         composer = midi_dict.metadata.get("composer")
         if composer and (composer in self.composer_names):
@@ -385,6 +394,9 @@ class AbsTokenizer(Tokenizer):
             # Special case instrument is a drum. This occurs exclusively when
             # MIDI channel is 9 when 0 indexing
             if _channel == 9:
+                if self.include_drums is False:
+                    continue
+
                 _note_onset = self._quantize_onset(
                     curr_time_since_onset % self.abs_time_step_ms
                 )
@@ -502,6 +514,16 @@ class AbsTokenizer(Tokenizer):
             elif (
                 tok[0] == "prefix"
                 and tok[1] == "instrument"
+                and tok[2] == "drum"
+                and not self.include_drums
+            ):
+                logger.warning(
+                    "Encountered drum prefix token but include_drums=False, skipping"
+                )
+                continue
+            elif (
+                tok[0] == "prefix"
+                and tok[1] == "instrument"
                 and tok[2] in self.instruments_wd
             ):
                 # Process instrument prefix tokens
@@ -570,9 +592,9 @@ class AbsTokenizer(Tokenizer):
             ):
                 continue
             elif tok_1 in {self.ped_on_tok, self.ped_off_tok}:
-                assert isinstance(
-                    tok_2[1], int
-                ), f"Expected int for onset, got {tok_2[1]}"
+                assert isinstance(tok_2[1], int), (
+                    f"Expected int for onset, got {tok_2[1]}"
+                )
 
                 _data = 1 if tok_1 == self.ped_on_tok else 0
                 _tick: int = curr_tick + tok_2[1]
@@ -585,15 +607,19 @@ class AbsTokenizer(Tokenizer):
                     }
                 )
             elif _tok_type_1 == "drum" and _tok_type_2 == "onset":
-                assert isinstance(
-                    tok_2[1], int
-                ), f"Expected int for onset, got {tok_2[1]}"
-                assert isinstance(
-                    tok_1[1], int
-                ), f"Expected int for pitch, got {tok_1[1]}"
+                if not self.include_drums:
+                    logger.warning(
+                        "Encountered drum token but include_drums=False, skipping"
+                    )
+                    continue
+                assert isinstance(tok_2[1], int), (
+                    f"Expected int for onset, got {tok_2[1]}"
+                )
+                assert isinstance(tok_1[1], int), (
+                    f"Expected int for pitch, got {tok_1[1]}"
+                )
 
                 _pitch: int = tok_1[1]
-                _channel = instrument_to_channel["drum"]
                 _velocity: int = self.config["drum_velocity"]
                 _start_tick: int = curr_tick + tok_2[1]
                 _end_tick: int = _start_tick + self.time_step_ms
@@ -623,21 +649,21 @@ class AbsTokenizer(Tokenizer):
                 and _tok_type_2 == "onset"
                 and _tok_type_3 == "dur"
             ):
-                assert isinstance(
-                    tok_1[0], str
-                ), f"Expected str for instrument, got {tok_1[0]}"
-                assert isinstance(
-                    tok_1[1], int
-                ), f"Expected int for pitch, got {tok_1[1]}"
-                assert isinstance(
-                    tok_1[2], int
-                ), f"Expected int for velocity, got {tok_1[2]}"
-                assert isinstance(
-                    tok_2[1], int
-                ), f"Expected int for onset, got {tok_2[1]}"
-                assert isinstance(
-                    tok_3[1], int
-                ), f"Expected int for duration, got {tok_3[1]}"
+                assert isinstance(tok_1[0], str), (
+                    f"Expected str for instrument, got {tok_1[0]}"
+                )
+                assert isinstance(tok_1[1], int), (
+                    f"Expected int for pitch, got {tok_1[1]}"
+                )
+                assert isinstance(tok_1[2], int), (
+                    f"Expected int for velocity, got {tok_1[2]}"
+                )
+                assert isinstance(tok_2[1], int), (
+                    f"Expected int for onset, got {tok_2[1]}"
+                )
+                assert isinstance(tok_3[1], int), (
+                    f"Expected int for duration, got {tok_3[1]}"
+                )
 
                 _instrument = tok_1[0]
                 _pitch = tok_1[1]
@@ -730,17 +756,17 @@ class AbsTokenizer(Tokenizer):
                     return tok
                 else:
                     # Return augmented tok
-                    assert (
-                        isinstance(tok, tuple) and len(tok) == 3
-                    ), f"Invalid note token"
+                    assert isinstance(tok, tuple) and len(tok) == 3, (
+                        f"Invalid note token"
+                    )
                     (_instrument, _pitch, _velocity) = tok
 
-                    assert isinstance(
-                        _pitch, int
-                    ), f"Expected int for pitch, got {_pitch}"
-                    assert isinstance(
-                        _velocity, int
-                    ), f"Expected int for velocity, got {_velocity}"
+                    assert isinstance(_pitch, int), (
+                        f"Expected int for pitch, got {_pitch}"
+                    )
+                    assert isinstance(_velocity, int), (
+                        f"Expected int for velocity, got {_velocity}"
+                    )
 
                     if 0 <= _pitch + _pitch_aug <= 127:
                         return (_instrument, _pitch + _pitch_aug, _velocity)
@@ -897,7 +923,7 @@ class AbsTokenizer(Tokenizer):
             while idx < len(src):
                 tok = src[idx]
                 is_tuple = isinstance(tok, tuple)
-                if tok is bos_tok or (is_tuple and tok[0] == "prefix"):
+                if tok == bos_tok or (is_tuple and tok[0] == "prefix"):
                     res_prefix.append(tok)
                     idx += 1
                 else:
@@ -912,7 +938,7 @@ class AbsTokenizer(Tokenizer):
                     idx += 1
                     continue
 
-                if tok is eos_tok:
+                if tok == eos_tok:
                     eos_tok_seen = True
                     idx += 1
                     continue
