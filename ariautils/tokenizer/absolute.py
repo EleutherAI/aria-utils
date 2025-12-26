@@ -100,7 +100,7 @@ class AbsTokenizer(Tokenizer):
             if v is False
         ]
 
-        self.include_drums = self.config.get["include_drums"]
+        self.include_drums = self.config["include_drums"]
         if self.include_drums:
             self.instruments_wd = self.instruments_nd + ["drum"]
         else:
