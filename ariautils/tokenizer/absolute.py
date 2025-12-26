@@ -100,7 +100,7 @@ class AbsTokenizer(Tokenizer):
             if v is False
         ]
 
-        self.include_drums: bool = self.config.get("include_drums", True)
+        self.include_drums = self.config.get["include_drums"]
         if self.include_drums:
             self.instruments_wd = self.instruments_nd + ["drum"]
         else:
@@ -156,8 +156,14 @@ class AbsTokenizer(Tokenizer):
         self.include_pedal = self.config["include_pedal"]
         self.ped_on_tok = "<PED_ON>"
         self.ped_off_tok = "<PED_OFF>"
-        if self.config["include_pedal"] is True:
+        if self.include_pedal is True:
             self.add_tokens_to_vocab([self.ped_on_tok, self.ped_off_tok])
+
+        self.include_delimiter = self.config["include_delimiter"]
+        self.delimiter_tok = "<X>"
+        if self.include_delimiter is True:
+            self.add_tokens_to_vocab([self.delimiter_tok])
+            self.special_tokens.append(self.delimiter_tok)
 
     def export_data_aug(self) -> list[Callable[[list[Token]], list[Token]]]:
         return [
@@ -878,6 +884,7 @@ class AbsTokenizer(Tokenizer):
             Callable[[list[Token], float], list[Token]]: Exported function.
         """
 
+        # TODO: Potential issue with delimiter_tok at start
         def tempo_aug(
             src: list[Token],
             abs_time_step: int,
@@ -887,6 +894,7 @@ class AbsTokenizer(Tokenizer):
             eos_tok: str,
             time_tok: str,
             dim_tok: str,
+            delimiter_tok: str,
             pad_tok: str,
             unk_tok: str,
             ped_on_tok: str,
@@ -917,6 +925,7 @@ class AbsTokenizer(Tokenizer):
             res_prefix: list[Token] = []
             src_time_tok_cnt = 0
             dim_tok_seen_at: tuple[int, int] | None = None
+            delimiter_tok_seen_at: tuple[int, int] | None = None
             eos_tok_seen: bool = False
 
             idx = 0
@@ -960,6 +969,20 @@ class AbsTokenizer(Tokenizer):
                         else 0
                     )
                     dim_tok_seen_at = (last_time, last_onset)
+                    idx += 1
+                    continue
+                if tok == delimiter_tok:
+                    if delimiter_tok_seen_at is not None:
+                        logger.warning(
+                            "Multiple <X> tokens encountered in augmentation"
+                        )
+                    last_time = max(buffer.keys()) if buffer else 0
+                    last_onset = (
+                        max(buffer[last_time].keys())
+                        if buffer.get(last_time)
+                        else 0
+                    )
+                    delimiter_tok_seen_at = (last_time, last_onset)
                     idx += 1
                     continue
 
@@ -1069,6 +1092,9 @@ class AbsTokenizer(Tokenizer):
                     if dim_tok_seen_at == (src_time_tok_cnt, src_onset):
                         res_events.append(dim_tok)
                         dim_tok_seen_at = None
+                    if delimiter_tok_seen_at == (src_time_tok_cnt, src_onset):
+                        res_events.append(delimiter_tok)
+                        delimiter_tok_seen_at = None
 
             # Re-assemble the final sequence
             final_res = res_prefix + res_events
@@ -1088,6 +1114,7 @@ class AbsTokenizer(Tokenizer):
                 eos_tok=self.eos_tok,
                 time_tok=self.time_tok,
                 dim_tok=self.dim_tok,
+                delimiter_tok=self.delimiter_tok,
                 pad_tok=self.pad_tok,
                 unk_tok=self.unk_tok,
                 ped_on_tok=self.ped_on_tok,
