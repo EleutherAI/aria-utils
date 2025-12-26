@@ -89,6 +89,7 @@
             "time_step_ms": 10,
             "include_drums": true,
             "include_pedal": false,
+            "include_delimiter": false,
             "composer_names": ["bach", "beethoven", "mozart", "chopin", "rachmaninoff", "liszt", "debussy", "schubert", "brahms", "ravel", "satie", "scarlatti"],
             "form_names": ["sonata", "prelude", "nocturne", "étude", "waltz", "mazurka", "impromptu", "fugue"],
             "genre_names": ["jazz", "classical"]
