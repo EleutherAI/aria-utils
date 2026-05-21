@@ -5,7 +5,7 @@ import copy
 
 from importlib import resources
 from pathlib import Path
-from typing import Final
+from typing import Any, Final, cast
 
 from ariautils.midi import MidiDict, normalize_midi_dict
 from ariautils.tokenizer import AbsTokenizer, RelTokenizer
@@ -204,8 +204,12 @@ class TestAbsTokenizer(unittest.TestCase):
                         msg_aug["data"]["pitch"],
                     )
 
-                    msg_no_aug_compare = copy.deepcopy(msg_no_aug)
-                    msg_aug_compare = copy.deepcopy(msg_aug)
+                    msg_no_aug_compare = cast(
+                        dict[str, Any], copy.deepcopy(msg_no_aug)
+                    )
+                    msg_aug_compare = cast(
+                        dict[str, Any], copy.deepcopy(msg_aug)
+                    )
                     del msg_no_aug_compare["data"]["pitch"]  # type: ignore[misc]
                     del msg_aug_compare["data"]["pitch"]  # type: ignore[misc]
                     self.assertDictEqual(msg_no_aug_compare, msg_aug_compare)
@@ -287,8 +291,10 @@ class TestAbsTokenizer(unittest.TestCase):
                     )
                     self.assertEqual(msg_aug["data"]["velocity"], _velocity)
 
-                msg_no_aug_compare = copy.deepcopy(msg_no_aug)
-                msg_aug_compare = copy.deepcopy(msg_aug)
+                msg_no_aug_compare = cast(
+                    dict[str, Any], copy.deepcopy(msg_no_aug)
+                )
+                msg_aug_compare = cast(dict[str, Any], copy.deepcopy(msg_aug))
                 del msg_no_aug_compare["data"]["velocity"]  # type: ignore[misc]
                 del msg_aug_compare["data"]["velocity"]  # type: ignore[misc]
                 self.assertDictEqual(msg_no_aug_compare, msg_aug_compare)
@@ -374,8 +380,10 @@ class TestAbsTokenizer(unittest.TestCase):
                     abs(msg_aug["data"]["end"] - _end_tick), 10
                 )
 
-                msg_no_aug_compare = copy.deepcopy(msg_no_aug)
-                msg_aug_compare = copy.deepcopy(msg_aug)
+                msg_no_aug_compare = cast(
+                    dict[str, Any], copy.deepcopy(msg_no_aug)
+                )
+                msg_aug_compare = cast(dict[str, Any], copy.deepcopy(msg_aug))
                 del msg_no_aug_compare["tick"]  # type: ignore[misc]
                 del msg_no_aug_compare["data"]["start"]  # type: ignore[misc]
                 del msg_no_aug_compare["data"]["end"]  # type: ignore[misc]
@@ -573,8 +581,12 @@ class TestRelTokenizer(unittest.TestCase):
                         msg_aug["data"]["pitch"],
                     )
 
-                    msg_no_aug_compare = copy.deepcopy(msg_no_aug)
-                    msg_aug_compare = copy.deepcopy(msg_aug)
+                    msg_no_aug_compare = cast(
+                        dict[str, Any], copy.deepcopy(msg_no_aug)
+                    )
+                    msg_aug_compare = cast(
+                        dict[str, Any], copy.deepcopy(msg_aug)
+                    )
                     del msg_no_aug_compare["data"]["pitch"]  # type: ignore[misc]
                     del msg_aug_compare["data"]["pitch"]  # type: ignore[misc]
                     self.assertDictEqual(msg_no_aug_compare, msg_aug_compare)
@@ -656,8 +668,10 @@ class TestRelTokenizer(unittest.TestCase):
                     )
                     self.assertEqual(msg_aug["data"]["velocity"], _velocity)
 
-                msg_no_aug_compare = copy.deepcopy(msg_no_aug)
-                msg_aug_compare = copy.deepcopy(msg_aug)
+                msg_no_aug_compare = cast(
+                    dict[str, Any], copy.deepcopy(msg_no_aug)
+                )
+                msg_aug_compare = cast(dict[str, Any], copy.deepcopy(msg_aug))
                 del msg_no_aug_compare["data"]["velocity"]  # type: ignore[misc]
                 del msg_aug_compare["data"]["velocity"]  # type: ignore[misc]
                 self.assertDictEqual(msg_no_aug_compare, msg_aug_compare)

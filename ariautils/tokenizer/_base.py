@@ -145,7 +145,7 @@ class Tokenizer:
             raise ValueError("List is empty")
 
         left, right = 0, len(sorted_list) - 1
-        closest = float("inf")
+        closest = sorted_list[0]
 
         while left <= right:
             mid = (left + right) // 2

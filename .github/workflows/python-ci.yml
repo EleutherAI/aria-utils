@@ -21,14 +21,13 @@ jobs:
         python -m pip install --upgrade pip
         pip install .[dev]
         
-    - name: black
+    - name: ruff
       run: |
-        black --check .
+        ruff check .
         
-    - name: mypy
+    - name: ty
       run: |
-        mypy ariautils
-        mypy tests
+        ty check
         
     - name: Run tests with pytest
       run: |
