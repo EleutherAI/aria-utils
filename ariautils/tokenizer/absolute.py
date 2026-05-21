@@ -6,7 +6,7 @@ import random
 
 from pathlib import Path
 from collections import defaultdict
-from typing import Final, Callable, Any, Concatenate
+from typing import Final, Callable, Any, Concatenate, cast
 
 from ariautils.midi import (
     MidiDict,
@@ -316,7 +316,7 @@ class AbsTokenizer(Tokenizer):
             if len(channel_to_instrument.keys()) > 1:
                 warn_once(
                     logger_name=logger.name,
-                    message=f"AbsTokenizer config setting include_pedal=True "
+                    message="AbsTokenizer config setting include_pedal=True "
                     "does not officially support multiple channels. You must "
                     "manually ensure that channels don't overlap.",
                 )
@@ -608,6 +608,7 @@ class AbsTokenizer(Tokenizer):
                     {
                         "type": "pedal",
                         "data": _data,
+                        "value": _data * 127,
                         "tick": _tick,
                         "channel": 0,
                     }
@@ -632,7 +633,7 @@ class AbsTokenizer(Tokenizer):
 
                 if "drum" not in instrument_to_channel.keys():
                     logger.warning(
-                        f"Tried to decode note message for unexpected instrument: drum"
+                        "Tried to decode note message for unexpected instrument: drum"
                     )
                 else:
                     _channel = instrument_to_channel["drum"]
@@ -763,7 +764,7 @@ class AbsTokenizer(Tokenizer):
                 else:
                     # Return augmented tok
                     assert isinstance(tok, tuple) and len(tok) == 3, (
-                        f"Invalid note token"
+                        "Invalid note token"
                     )
                     (_instrument, _pitch, _velocity) = tok
 
@@ -1037,6 +1038,7 @@ class AbsTokenizer(Tokenizer):
                     continue
 
                 if current_onset != -1:
+                    current_onset = cast(int, current_onset)
                     buffer[src_time_tok_cnt][current_onset].append(
                         event_subsequence
                     )
@@ -1069,7 +1071,7 @@ class AbsTokenizer(Tokenizer):
                         first_tok = event[0]
                         # Note event with duration
                         if len(event) == 3:
-                            _src_dur_tok = event[2]
+                            _src_dur_tok = cast(tuple[str, int], event[2])
                             tgt_dur = _quantize_time(
                                 _src_dur_tok[1] * tempo_aug
                             )

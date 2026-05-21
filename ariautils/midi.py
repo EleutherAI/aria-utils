@@ -58,6 +58,7 @@ class PedalMessage(TypedDict):
 
     type: Literal["pedal"]
     data: Literal[0, 1]  # 0 for off, 1 for on
+    value: int
     tick: int
     channel: int
 
@@ -381,11 +382,22 @@ class MidiDict:
 
         return self
 
+    def apply_pedal_threshold(self, threshold: int = 64) -> "MidiDict":
+        """Apply a threshold to raw sustain pedal values in place."""
+
+        if threshold < 0 or threshold > 127:
+            raise ValueError("threshold must be between 0 and 127")
+
+        for pedal_msg in self.pedal_msgs:
+            pedal_msg["data"] = 1 if pedal_msg["value"] >= threshold else 0
+
+        return self
+
     def resolve_pedal(self) -> "MidiDict":
         """Extend note offsets according to pedal and resolve any note overlaps"""
 
         # If has been already resolved, we don't recalculate
-        if self.pedal_resolved == True:
+        if self.pedal_resolved:
             print("Pedal has already been resolved")
 
         # Organize note messages by channel
@@ -646,6 +658,7 @@ def _extract_track_data(
                 {
                     "type": "pedal",
                     "data": 0 if message.value < 64 else 1,
+                    "value": message.value,
                     "tick": message.time,
                     "channel": message.channel,
                 }
@@ -860,19 +873,17 @@ def dict_to_midi(mid_data: MidiDictData) -> mido.MidiFile:
                 )
 
     # Magic sorting function
-    def _sort_fn(msg: mido.Message) -> tuple[int, int]:
-        if hasattr(msg, "velocity"):
-            return (msg.time, msg.velocity)  # pyright: ignore
-        else:
-            return (msg.time, 1000)  # pyright: ignore
+    def _sort_fn(msg: Any) -> tuple[int, int]:
+        return (int(msg.time), int(getattr(msg, "velocity", 1000)))
 
     # Sort and convert from abs_time -> delta_time
-    track = sorted(track, key=_sort_fn)
+    sorted_track: list[Any] = sorted(track, key=_sort_fn)
     tick = 0
-    for msg in track:
+    for msg in sorted_track:
         msg.time -= tick
         tick += msg.time
 
+    track = mido.MidiTrack(sorted_track)
     track.append(mido.MetaMessage("end_of_track", time=0))
     mid = mido.MidiFile(type=0)
     mid.ticks_per_beat = ticks_per_beat
@@ -1044,7 +1055,7 @@ def meta_maestro_json(
 
     file_name = Path(abs_load_path).stem
     metadata = load_maestro_metadata_json().get(file_name + ".midi", None)
-    if metadata == None:
+    if metadata is None:
         return {}
 
     matched_forms_unique = set()
@@ -1599,10 +1610,13 @@ def test_note_density_in_interval(
     """
 
     for test_params in test_params_list:
-        success, (
-            notes_per_second,
-            notes_per_second_per_pitch,
-            interval_start_s,
+        (
+            success,
+            (
+                notes_per_second,
+                notes_per_second_per_pitch,
+                interval_start_s,
+            ),
         ) = _test_note_density_in_interval(
             midi_dict=midi_dict,
             max_notes_per_second=test_params["max_notes_per_second"],

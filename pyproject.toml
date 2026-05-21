@@ -25,11 +25,7 @@ classifiers = [
 Repository = "https://github.com/EleutherAI/aria-utils"
 
 [project.optional-dependencies]
-dev = [
-    "mypy",
-    "black",
-    "pytest",
-]
+dev = ["ruff", "ty", "pytest"]
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -38,10 +34,8 @@ include = ["ariautils", "ariautils.*"]
 [tool.setuptools.package-data]
 ariautils = ["config/*.json"]
 
-[tool.black]
+[tool.ruff]
 line-length = 80
-target-version = ["py311"]
-include = '\.pyi?$'
 
 [tool.mypy]
 python_version = "3.11"

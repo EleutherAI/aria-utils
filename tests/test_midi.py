@@ -3,12 +3,13 @@
 import unittest
 import tempfile
 import shutil
+import mido
 
 from importlib import resources
 from pathlib import Path
 from typing import Final
 
-from ariautils.midi import MidiDict, get_test_fn
+from ariautils.midi import MidiDict
 from ariautils.utils import get_logger
 
 
@@ -70,6 +71,97 @@ class TestMidiDict(unittest.TestCase):
         self.assertEqual(
             midi_dict_orig.calculate_hash(), midi_dict_temp.calculate_hash()
         )
+
+    def test_raw_pedal_values(self) -> None:
+        expected_values = [0, 63, 64, 65, 127]
+        mid = mido.MidiFile()
+        track = mido.MidiTrack()
+        mid.tracks.append(track)
+
+        for value in expected_values:
+            track.append(
+                mido.Message(
+                    "control_change",
+                    control=64,
+                    value=value,
+                    time=0,
+                    channel=0,
+                )
+            )
+
+        with tempfile.NamedTemporaryFile(suffix=".mid") as temp_file:
+            mid.save(temp_file.name)
+            midi_dict = MidiDict.from_midi(temp_file.name)
+
+        self.assertEqual(
+            [msg["value"] for msg in midi_dict.pedal_msgs], expected_values
+        )
+        self.assertEqual(
+            [msg["data"] for msg in midi_dict.pedal_msgs],
+            [0, 0, 1, 1, 1],
+        )
+
+    def test_apply_pedal_threshold(self) -> None:
+        midi_dict = MidiDict.from_msg_dict(
+            {
+                "meta_msgs": [],
+                "tempo_msgs": [],
+                "pedal_msgs": [
+                    {
+                        "type": "pedal",
+                        "data": 0,
+                        "value": 63,
+                        "tick": 0,
+                        "channel": 0,
+                    },
+                    {
+                        "type": "pedal",
+                        "data": 1,
+                        "value": 72,
+                        "tick": 1,
+                        "channel": 0,
+                    },
+                    {
+                        "type": "pedal",
+                        "data": 1,
+                        "value": 71,
+                        "tick": 2,
+                        "channel": 0,
+                    },
+                    {
+                        "type": "pedal",
+                        "data": 1,
+                        "value": 127,
+                        "tick": 3,
+                        "channel": 0,
+                    },
+                ],
+                "instrument_msgs": [],
+                "note_msgs": [
+                    {
+                        "type": "note",
+                        "data": {
+                            "pitch": 60,
+                            "start": 0,
+                            "end": 50,
+                            "velocity": 64,
+                        },
+                        "tick": 0,
+                        "channel": 0,
+                    }
+                ],
+                "ticks_per_beat": 480,
+                "metadata": {},
+            }
+        )
+
+        result = midi_dict.apply_pedal_threshold(72)
+
+        self.assertIs(result, midi_dict)
+        self.assertEqual(
+            [msg["data"] for msg in midi_dict.pedal_msgs], [0, 1, 0, 1]
+        )
+        self.assertEqual(midi_dict.note_msgs[0]["data"]["end"], 50)
 
     def test_resolve_pedal(self) -> None:
         load_path = TEST_DATA_DIRECTORY.joinpath("arabesque.mid")

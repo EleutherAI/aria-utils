@@ -400,14 +400,14 @@ class RelTokenizer(Tokenizer):
             ):
                 continue
             elif _curr_tok_type == "wait":
-                assert isinstance(
-                    curr_tok[1], int
-                ), f"Expected int for wait, got {curr_tok[1]}"
+                assert isinstance(curr_tok[1], int), (
+                    f"Expected int for wait, got {curr_tok[1]}"
+                )
                 curr_tick += curr_tok[1]
             elif _curr_tok_type == "drum":
-                assert isinstance(
-                    curr_tok[1], int
-                ), f"Expected int for onset, got {curr_tok[1]}"
+                assert isinstance(curr_tok[1], int), (
+                    f"Expected int for onset, got {curr_tok[1]}"
+                )
 
                 _pitch = curr_tok[1]
                 _channel = instrument_to_channel["drum"]
@@ -433,18 +433,18 @@ class RelTokenizer(Tokenizer):
                 _curr_tok_type in self.instruments_nd
                 and _next_tok_type == "dur"
             ):
-                assert isinstance(
-                    curr_tok[0], str
-                ), f"Expected str for instrument, got {curr_tok[0]}"
-                assert isinstance(
-                    curr_tok[1], int
-                ), f"Expected int for pitch, got {curr_tok[1]}"
-                assert isinstance(
-                    curr_tok[2], int
-                ), f"Expected int for velocity, got {curr_tok[2]}"
-                assert isinstance(
-                    next_tok[1], int
-                ), f"Expected int for duration, got {next_tok[1]}"
+                assert isinstance(curr_tok[0], str), (
+                    f"Expected str for instrument, got {curr_tok[0]}"
+                )
+                assert isinstance(curr_tok[1], int), (
+                    f"Expected int for pitch, got {curr_tok[1]}"
+                )
+                assert isinstance(curr_tok[2], int), (
+                    f"Expected int for velocity, got {curr_tok[2]}"
+                )
+                assert isinstance(next_tok[1], int), (
+                    f"Expected int for duration, got {next_tok[1]}"
+                )
 
                 _instrument = curr_tok[0]
                 _pitch = curr_tok[1]
@@ -537,9 +537,9 @@ class RelTokenizer(Tokenizer):
                     return tok
                 else:
                     # Return augmented tok
-                    assert (
-                        isinstance(tok, tuple) and len(tok) == 3
-                    ), f"Invalid note token"
+                    assert isinstance(tok, tuple) and len(tok) == 3, (
+                        "Invalid note token"
+                    )
                     (_instrument, _pitch, _velocity) = tok
 
                     if 0 <= _pitch + _pitch_aug <= 127:
