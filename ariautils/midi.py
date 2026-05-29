@@ -452,7 +452,7 @@ class MidiDict:
                     note_msg["data"]["end"],
                 )
 
-                if pedal_start_tick <= note_end <= pedal_end_tick:
+                if pedal_start_tick < note_end <= pedal_end_tick:
                     # Found note for which pedal is useful
                     return True
 
