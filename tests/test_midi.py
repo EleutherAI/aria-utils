@@ -163,6 +163,54 @@ class TestMidiDict(unittest.TestCase):
         )
         self.assertEqual(midi_dict.note_msgs[0]["data"]["end"], 50)
 
+    def test_apply_pedal_threshold_buffer(self) -> None:
+        midi_dict = MidiDict.from_msg_dict(
+            {
+                "meta_msgs": [],
+                "tempo_msgs": [],
+                "pedal_msgs": [
+                    {
+                        "type": "pedal",
+                        "data": 0,
+                        "value": value,
+                        "tick": tick,
+                        "channel": 0,
+                    }
+                    for tick, value in enumerate(
+                        [0, 63, 72, 70, 57, 56, 65, 73, 60, 55]
+                    )
+                ],
+                "instrument_msgs": [],
+                "note_msgs": [
+                    {
+                        "type": "note",
+                        "data": {
+                            "pitch": 60,
+                            "start": 0,
+                            "end": 50,
+                            "velocity": 64,
+                        },
+                        "tick": 0,
+                        "channel": 0,
+                    }
+                ],
+                "ticks_per_beat": 480,
+                "metadata": {},
+            }
+        )
+
+        result = midi_dict.apply_pedal_threshold(
+            threshold=64, buffer=8, transitions_only=True
+        )
+
+        self.assertIs(result, midi_dict)
+        self.assertEqual(
+            [msg["tick"] for msg in midi_dict.pedal_msgs], [2, 5, 7, 9]
+        )
+        self.assertEqual(
+            [msg["data"] for msg in midi_dict.pedal_msgs], [1, 0, 1, 0]
+        )
+
     def test_resolve_pedal(self) -> None:
         load_path = TEST_DATA_DIRECTORY.joinpath("arabesque.mid")
         save_path = RESULTS_DATA_DIRECTORY.joinpath(

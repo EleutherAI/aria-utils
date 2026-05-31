@@ -382,14 +382,38 @@ class MidiDict:
 
         return self
 
-    def apply_pedal_threshold(self, threshold: int = 64) -> "MidiDict":
-        """Apply a threshold to raw sustain pedal values in place."""
+    def apply_pedal_threshold(
+        self,
+        threshold: int = 64,
+        buffer: int = 0,
+        transitions_only: bool = False,
+    ) -> "MidiDict":
+        """Apply threshold hysteresis to raw sustain pedal values in place."""
 
         if threshold < 0 or threshold > 127:
             raise ValueError("threshold must be between 0 and 127")
+        if buffer < 0 or threshold - buffer < 0 or threshold + buffer > 127:
+            raise ValueError("buffer must keep thresholds between 0 and 127")
 
-        for pedal_msg in self.pedal_msgs:
-            pedal_msg["data"] = 1 if pedal_msg["value"] >= threshold else 0
+        pedal_state: dict[int, Literal[0, 1]] = {}
+        pedal_msgs = []
+        for pedal_msg in sorted(self.pedal_msgs, key=lambda msg: msg["tick"]):
+            channel = pedal_msg["channel"]
+            prev_data: Literal[0, 1] = pedal_state.get(channel, 0)
+
+            if pedal_msg["value"] >= threshold + buffer:
+                data: Literal[0, 1] = 1
+            elif pedal_msg["value"] <= threshold - buffer:
+                data = 0
+            else:
+                data = prev_data
+
+            pedal_msg["data"] = data
+            pedal_state[channel] = data
+            if not transitions_only or data != prev_data:
+                pedal_msgs.append(pedal_msg)
+
+        self.pedal_msgs = pedal_msgs
 
         return self
 
