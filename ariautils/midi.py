@@ -531,7 +531,7 @@ class MidiDict:
                     and pedal_msg_value == 1
                 ):
                     # Current msg is last one and ON  -> remove curr pedal_msg
-                    pedal_msg_idxs_to_remove.append(pedal_msg_idx)
+                    pedal_msg_idxs_to_remove.add(pedal_msg_idx)
 
                 # Logic for removing repeated pedal messages and updating
                 # pedal_down_tick and pedal_down_idx
@@ -543,12 +543,12 @@ class MidiDict:
                         continue
                     else:
                         # Pedal is OFF and current msg is OFF -> remove curr pedal_msg
-                        pedal_msg_idxs_to_remove.append(pedal_msg_idx)
+                        pedal_msg_idxs_to_remove.add(pedal_msg_idx)
                         continue
                 else:
                     if pedal_msg_value == 1:
                         # Pedal is ON and current msg is ON -> remove curr pedal_msg
-                        pedal_msg_idxs_to_remove.append(pedal_msg_idx)
+                        pedal_msg_idxs_to_remove.add(pedal_msg_idx)
                         continue
 
                 pedal_is_useful = _is_pedal_useful(
@@ -560,10 +560,8 @@ class MidiDict:
                 if pedal_is_useful is False:
                     # Pedal hasn't effected any notes -> remove
                     assert pedal_down_msg_idx is not None
-                    pedal_msg_idxs_to_remove.append(
-                        pedal_down_msg_idx
-                    )  # line 517
-                    pedal_msg_idxs_to_remove.append(pedal_msg_idx)
+                    pedal_msg_idxs_to_remove.add(pedal_down_msg_idx)  # line 517
+                    pedal_msg_idxs_to_remove.add(pedal_msg_idx)
 
                 # Finished processing pedal, set pedal state to OFF
                 pedal_down_tick = None
