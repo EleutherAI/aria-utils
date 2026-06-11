@@ -485,7 +485,7 @@ class MidiDict:
             return False
 
         def _process_channel_pedals(channel: int) -> None:
-            pedal_msg_idxs_to_remove = []
+            pedal_msg_idxs_to_remove = set()
             pedal_down_tick = None
             pedal_down_msg_idx = None
 
@@ -504,7 +504,7 @@ class MidiDict:
                     )
 
                     if _channel == channel:
-                        pedal_msg_idxs_to_remove.append(pedal_msg_idx)
+                        pedal_msg_idxs_to_remove.add(pedal_msg_idx)
 
                 # Remove messages
                 self.pedal_msgs = [
