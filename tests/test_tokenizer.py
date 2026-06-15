@@ -2,6 +2,8 @@
 
 import unittest
 import copy
+import json
+import tempfile
 
 from importlib import resources
 from pathlib import Path
@@ -135,6 +137,43 @@ class TestAbsTokenizer(unittest.TestCase):
             seq = f(seq)
 
         tokenizer.detokenize(tokenized_seq=seq).to_midi().save(save_path)
+
+    def test_tokenize_detokenize_pedal_note_offsets(self) -> None:
+        load_path = TEST_DATA_DIRECTORY.joinpath("maestro.mid")
+        config_path = resources.files("ariautils.config").joinpath(
+            "config.json"
+        )
+        with config_path.open("r") as f:
+            config = json.load(f)
+        config["tokenizer"]["abs"]["include_pedal"] = True
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f:
+            json.dump(config, f)
+            f.flush()
+            tokenizer = AbsTokenizer(config_path=f.name)
+
+        midi_dict = MidiDict.from_midi(load_path)
+        with self.assertRaises(AssertionError):
+            AbsTokenizer().tokenize(
+                midi_dict, extend_note_durations_with_pedal=False
+            )
+
+        seq = tokenizer.tokenize(
+            midi_dict,
+            remove_preceding_silence=False,
+            add_dim_tok=False,
+            extend_note_durations_with_pedal=False,
+        )
+        midi_dict_2 = tokenizer.detokenize(seq)
+
+        note = midi_dict.note_msgs[0]["data"]
+        expected_duration = tokenizer._quantize_dur(
+            midi_dict.tick_to_ms(note["end"])
+            - midi_dict.tick_to_ms(note["start"])
+        )
+        note_2 = midi_dict_2.note_msgs[0]["data"]
+        self.assertEqual(note_2["end"] - note_2["start"], expected_duration)
+        self.assertEqual(len(midi_dict_2.pedal_msgs), len(midi_dict.pedal_msgs))
 
     def test_pitch_aug(self) -> None:
         def _test_out_of_bounds(

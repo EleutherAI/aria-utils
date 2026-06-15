@@ -291,7 +291,13 @@ class AbsTokenizer(Tokenizer):
         remove_preceding_silence: bool = True,
         add_dim_tok: bool = True,
         add_eos_tok: bool = True,
+        extend_note_durations_with_pedal: bool = True,
     ) -> list[Token]:
+        # extend_note_durations_with_pedal=False provides a mode appropriate
+        # for Disklavier modelling, however in this case note-offsets require
+        # pedal tokens in order to be faithful to the original midi_dict.
+        assert extend_note_durations_with_pedal or self.include_pedal
+
         ticks_per_beat = midi_dict.ticks_per_beat
         midi_dict.remove_instruments(self.config["ignore_instruments"])
 
@@ -427,15 +433,16 @@ class AbsTokenizer(Tokenizer):
                 assert _velocity is not None
                 assert _end_tick is not None
 
-                # Update _end_tick if affected by pedal
-                for pedal_interval in channel_to_pedal_intervals[_channel]:
-                    pedal_start, pedal_end = (
-                        pedal_interval[0],
-                        pedal_interval[1],
-                    )
-                    if pedal_start < _end_tick < pedal_end:
-                        _end_tick = pedal_end
-                        break
+                if extend_note_durations_with_pedal:
+                    # Update _end_tick if affected by pedal
+                    for pedal_interval in channel_to_pedal_intervals[_channel]:
+                        pedal_start, pedal_end = (
+                            pedal_interval[0],
+                            pedal_interval[1],
+                        )
+                        if pedal_start < _end_tick < pedal_end:
+                            _end_tick = pedal_end
+                            break
 
                 _note_duration = get_duration_ms(
                     start_tick=_start_tick,
@@ -467,6 +474,7 @@ class AbsTokenizer(Tokenizer):
         remove_preceding_silence: bool = True,
         add_dim_tok: bool = True,
         add_eos_tok: bool = True,
+        extend_note_durations_with_pedal: bool = True,
         **kwargs: Any,
     ) -> list[Token]:
         """Tokenizes a MidiDict object into a sequence.
@@ -478,6 +486,8 @@ class AbsTokenizer(Tokenizer):
             add_dim_tok (bool): Add diminish token if appropriate. Defaults to
                 True.
             add_dim_tok (bool): Append end of sequence token. Defaults to True.
+            extend_note_durations_with_pedal (bool): Extend note durations to
+                pedal release. Defaults to True.
 
         Returns:
             list[Token]: A sequence of tokens representing the MIDI content.
@@ -488,6 +498,7 @@ class AbsTokenizer(Tokenizer):
             remove_preceding_silence=remove_preceding_silence,
             add_dim_tok=add_dim_tok,
             add_eos_tok=add_eos_tok,
+            extend_note_durations_with_pedal=extend_note_durations_with_pedal,
         )
 
     def _detokenize_midi_dict(self, tokenized_seq: list[Token]) -> MidiDict:
