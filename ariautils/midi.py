@@ -280,12 +280,13 @@ class MidiDict:
 
         return channel_to_pedal_intervals
 
-    # TODO: This function might not behave correctly when acting on degenerate
-    # MidiDict objects.
     def resolve_overlaps(self) -> "MidiDict":
         """Resolves any note overlaps (inplace) between notes with the same
-        pitch and channel. This is achieved by converting a pair of notes with
-        the same pitch (a<b<c, x,y>0):
+        pitch and channel. Duplicate same-start notes are collapsed first so
+        overlap truncation cannot create zero-duration notes.
+
+        This is achieved by converting a pair of notes with the same pitch
+        (a<b<c, x,y>0):
 
         [a, b+x], [b-y, c] -> [a, b-y], [b-y, c]
 
@@ -302,20 +303,54 @@ class MidiDict:
             _pitch = msg["data"]["pitch"]
             note_msgs_c[_channel][_pitch].append(msg)
 
-        # We can modify notes by reference as they are dictionaries
+        # We can modify notes by reference as they are dictionaries.
+        msg_ids_to_remove = set()
         for channel, msgs_by_pitch in note_msgs_c.items():
             for pitch, msgs in msgs_by_pitch.items():
                 msgs.sort(
                     key=lambda msg: (msg["data"]["start"], msg["data"]["end"])
                 )
-                prev_off_tick = -1
-                for idx, msg in enumerate(msgs):
-                    on_tick = msg["data"]["start"]
-                    off_tick = msg["data"]["end"]
-                    if prev_off_tick > on_tick:
-                        # Adjust end of previous (idx - 1) msg to remove overlap
-                        msgs[idx - 1]["data"]["end"] = on_tick
-                    prev_off_tick = off_tick
+
+                deduped_msgs = []
+                for msg in msgs:
+                    if (
+                        deduped_msgs
+                        and deduped_msgs[-1]["data"]["start"]
+                        == msg["data"]["start"]
+                    ):
+                        prev_msg = deduped_msgs[-1]
+                        prev_data = prev_msg["data"]
+                        msg_data = msg["data"]
+
+                        if msg_data["end"] > prev_data["end"]:
+                            prev_data["end"] = msg_data["end"]
+                            prev_data["velocity"] = msg_data["velocity"]
+                        elif msg_data["end"] == prev_data["end"]:
+                            prev_data["velocity"] = max(
+                                prev_data["velocity"], msg_data["velocity"]
+                            )
+
+                        msg_ids_to_remove.add(id(msg))
+                        continue
+
+                    deduped_msgs.append(msg)
+
+                prev_msg = None
+                for msg in deduped_msgs:
+                    if (
+                        prev_msg is not None
+                        and prev_msg["data"]["end"] > msg["data"]["start"]
+                    ):
+                        # Adjust end of previous msg to remove overlap.
+                        prev_msg["data"]["end"] = msg["data"]["start"]
+                    prev_msg = msg
+
+        self.note_msgs = [
+            msg
+            for msg in self.note_msgs
+            if id(msg) not in msg_ids_to_remove
+            and msg["data"]["end"] > msg["data"]["start"]
+        ]
 
         return self
 

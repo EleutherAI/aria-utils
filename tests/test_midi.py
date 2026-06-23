@@ -211,6 +211,42 @@ class TestMidiDict(unittest.TestCase):
             [msg["data"] for msg in midi_dict.pedal_msgs], [1, 0, 1, 0]
         )
 
+    def test_resolve_overlaps_does_not_create_zero_duration_notes(
+        self,
+    ) -> None:
+        note_data = [
+            {"pitch": 60, "start": 100, "end": 110, "velocity": 64},
+            {"pitch": 60, "start": 100, "end": 130, "velocity": 80},
+        ]
+        midi_dict = MidiDict.from_msg_dict(
+            {
+                "meta_msgs": [],
+                "tempo_msgs": [],
+                "pedal_msgs": [],
+                "instrument_msgs": [],
+                "note_msgs": [
+                    {
+                        "type": "note",
+                        "data": note,
+                        "tick": note["start"],
+                        "channel": 0,
+                    }
+                    for note in note_data
+                ],
+                "ticks_per_beat": 480,
+                "metadata": {},
+            }
+        )
+
+        result = midi_dict.resolve_overlaps()
+
+        self.assertIs(result, midi_dict)
+        self.assertEqual(len(midi_dict.note_msgs), 1)
+        self.assertEqual(
+            midi_dict.note_msgs[0]["data"],
+            {"pitch": 60, "start": 100, "end": 130, "velocity": 80},
+        )
+
     def test_resolve_pedal(self) -> None:
         load_path = TEST_DATA_DIRECTORY.joinpath("arabesque.mid")
         save_path = RESULTS_DATA_DIRECTORY.joinpath(
