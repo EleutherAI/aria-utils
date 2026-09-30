@@ -9,7 +9,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Final
 
-from ariautils.midi import MidiDict
+from ariautils.midi import MidiDict, TempoMessage, get_duration_ms
 from ariautils.utils import get_logger
 
 
@@ -53,6 +53,25 @@ class TestMidiDict(unittest.TestCase):
         last_note_onset_tick = last_note["tick"]
         last_note_onset_ms = midi_dict.tick_to_ms(last_note_onset_tick)
         self.assertEqual(last_note_onset_ms, CORRECT_LAST_NOTE_ONSET_MS)
+
+    def test_duration_with_tempo_change(self) -> None:
+        tempo_msgs: list[TempoMessage] = [
+            {"type": "tempo", "tick": 0, "data": 500000},
+            {"type": "tempo", "tick": 1000, "data": 1000000},
+        ]
+        for start_tick, end_tick, expected_ms in [
+            (1200, 1600, 400),  # After the final tempo change.
+            (1000, 1400, 400),  # Exactly at the tempo change.
+            (800, 1200, 300),  # Across the tempo change.
+            (200, 600, 200),  # Before the tempo change.
+        ]:
+            with self.subTest(start_tick=start_tick, end_tick=end_tick):
+                self.assertEqual(
+                    get_duration_ms(
+                        start_tick, end_tick, tempo_msgs, ticks_per_beat=1000
+                    ),
+                    expected_ms,
+                )
 
     def test_calculate_hash(self) -> None:
         # Load two identical files with different filenames and metadata

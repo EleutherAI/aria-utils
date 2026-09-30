@@ -957,13 +957,12 @@ def get_duration_ms(
 ) -> int:
     """Calculates elapsed time (in ms) between start_tick and end_tick."""
 
-    # Finds idx such that:
-    # tempo_msg[idx]["tick"] < start_tick <= tempo_msg[idx+1]["tick"]
-    for idx, curr_msg in enumerate(tempo_msgs):
-        if start_tick <= curr_msg["tick"]:
+    # Find the last tempo change at or before start_tick.
+    idx = 0
+    for next_idx, msg in enumerate(tempo_msgs):
+        if msg["tick"] > start_tick:
             break
-    if idx > 0:  # Special case idx == 0 -> Don't -1
-        idx -= 1
+        idx = next_idx
 
     # It is important that we initialise curr_tick & curr_tempo here. In the
     # case that there is a single tempo message the following loop will not run.
